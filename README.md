@@ -212,6 +212,7 @@ Dans `GitHub > Settings > Secrets and variables > Actions > New repository secre
 
 - Le workflow n efface pas tout le serveur (`dangerous-clean-slate: false`).
 - Configure `public_html/api/config.php` avec tes identifiants MySQL production avant le premier deploy.
+- Le workflow n envoie pas `config.php` pour eviter d ecraser tes identifiants DB a chaque deploy.
 - Si ton FTP ouvre directement `public_html`, mets `FTP_SERVER_DIR=/`.
 
 ## Notes V2

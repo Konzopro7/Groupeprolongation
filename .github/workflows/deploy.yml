@@ -69,7 +69,6 @@ jobs:
           cp -R frontend/dist/. deploy/public_html/
 
           mkdir -p deploy/public_html/api
-          cp backend/config.php deploy/public_html/api/config.php
           cp backend/public/index.php deploy/public_html/api/index.php
           cp backend/public/.htaccess deploy/public_html/api/.htaccess
           cp -R backend/src deploy/public_html/api/src
