@@ -5,5 +5,7 @@ frontend/vite.config.js
 frontend/vite.config.d.ts
 backend/public/uploads/*
 !backend/public/uploads/.gitkeep
+frontend/*.zip
+backend/*.zip
 .DS_Store
 Thumbs.db

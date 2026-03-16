@@ -1,0 +1,90 @@
+name: Deploy To GreenGeeks
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: Build And Deploy
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install Frontend Dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Build Frontend
+        working-directory: frontend
+        run: npm run build
+
+      - name: Validate FTP Secrets
+        env:
+          FTP_SERVER: ${{ secrets.FTP_SERVER }}
+          FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
+          FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+          FTP_SERVER_DIR: ${{ secrets.FTP_SERVER_DIR }}
+          FTP_PROTOCOL: ${{ secrets.FTP_PROTOCOL }}
+        run: |
+          set -e
+          missing=0
+          for name in FTP_SERVER FTP_USERNAME FTP_PASSWORD FTP_SERVER_DIR; do
+            if [ -z "${!name}" ]; then
+              echo "::error::Missing GitHub secret: ${name}"
+              missing=1
+            fi
+          done
+
+          protocol="${FTP_PROTOCOL:-ftps}"
+          if [ "$protocol" != "ftp" ] && [ "$protocol" != "ftps" ]; then
+            echo "::error::FTP_PROTOCOL must be 'ftp' or 'ftps' (current: $protocol)"
+            missing=1
+          fi
+
+          if [ "$missing" -ne 0 ]; then
+            exit 1
+          fi
+
+      - name: Prepare Deploy Bundle
+        run: |
+          set -e
+          rm -rf deploy
+
+          mkdir -p deploy/public_html
+          cp -R frontend/dist/. deploy/public_html/
+
+          mkdir -p deploy/public_html/api
+          cp backend/config.php deploy/public_html/api/config.php
+          cp backend/public/index.php deploy/public_html/api/index.php
+          cp backend/public/.htaccess deploy/public_html/api/.htaccess
+          cp -R backend/src deploy/public_html/api/src
+
+          mkdir -p deploy/public_html/api/uploads
+          cp backend/public/uploads/.gitkeep deploy/public_html/api/uploads/.gitkeep
+
+      - name: Deploy Via FTP
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          server: ${{ secrets.FTP_SERVER }}
+          username: ${{ secrets.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          port: ${{ secrets.FTP_PORT != '' && secrets.FTP_PORT || 21 }}
+          protocol: ${{ secrets.FTP_PROTOCOL != '' && secrets.FTP_PROTOCOL || 'ftps' }}
+          local-dir: ./deploy/public_html/
+          server-dir: ${{ secrets.FTP_SERVER_DIR }}
+          dangerous-clean-slate: false

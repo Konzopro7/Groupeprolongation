@@ -178,6 +178,42 @@ php -S localhost:8000 backend/router.php
 
 En production, garder `VITE_API_BASE_URL=/api` (meme domaine).
 
+## Deploiement Auto GitHub Actions (FTP GreenGeeks)
+
+Un workflow est inclus:
+
+- `.github/workflows/deploy.yml`
+
+Il fait automatiquement:
+
+1. build du frontend (`frontend/dist`)
+2. preparation du bundle deployable:
+   - `public_html/*` (frontend)
+   - `public_html/api/*` (backend runtime)
+3. upload FTP/FTPS sur GreenGeeks au push sur `main`
+
+### Secrets GitHub a ajouter
+
+Dans `GitHub > Settings > Secrets and variables > Actions > New repository secret`:
+
+- `FTP_SERVER` (ex: `ftp.groupeprolongation.com`)
+- `FTP_USERNAME` (utilisateur FTP)
+- `FTP_PASSWORD` (mot de passe FTP)
+- `FTP_SERVER_DIR` (ex: `/public_html/`)
+- `FTP_PROTOCOL` (`ftps` recommande, ou `ftp`)
+- `FTP_PORT` (optionnel, `21` par defaut)
+
+### Activation
+
+1. push sur `main` -> deploy automatique
+2. ou execution manuelle via `Actions > Deploy To GreenGeeks > Run workflow`
+
+### Important
+
+- Le workflow n efface pas tout le serveur (`dangerous-clean-slate: false`).
+- Configure `public_html/api/config.php` avec tes identifiants MySQL production avant le premier deploy.
+- Si ton FTP ouvre directement `public_html`, mets `FTP_SERVER_DIR=/`.
+
 ## Notes V2
 
 - Contact:
