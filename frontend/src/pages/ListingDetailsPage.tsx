@@ -1,0 +1,229 @@
+import {
+  CalendarDaysIcon,
+  CheckBadgeIcon,
+  FireIcon,
+  MapPinIcon,
+  PhoneIcon,
+  TruckIcon,
+} from "@heroicons/react/24/outline";
+import { useEffect, useState } from "react";
+import { Link, useParams } from "react-router-dom";
+import { fetchListingById } from "../api/client";
+import { useSeo } from "../hooks/useSeo";
+import { Listing } from "../types";
+
+function isVideoMedia(url: string): boolean {
+  return /\.(mp4|webm|ogg|mov|avi|mkv|mpeg|mpg|wmv|flv|3gp|3g2)(\?.*)?$/i.test(url);
+}
+
+export default function ListingDetailsPage() {
+  const { id } = useParams();
+  const [listing, setListing] = useState<Listing | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [activeMediaIndex, setActiveMediaIndex] = useState(0);
+  const [activeMediaLoadError, setActiveMediaLoadError] = useState(false);
+
+  useSeo({
+    title: listing ? listing.title : "Detail annonce",
+    description:
+      listing?.description.slice(0, 150) ||
+      "Consultez les details complets de cette annonce sur Groupe Prolongation.",
+    image: listing?.images[0],
+  });
+
+  useEffect(() => {
+    if (!id) return;
+
+    setIsLoading(true);
+    fetchListingById(Number(id))
+      .then((item) => {
+        setListing(item);
+        setActiveMediaIndex(0);
+        setError(null);
+      })
+      .catch((apiError: Error) => {
+        setError(apiError.message);
+      })
+      .finally(() => setIsLoading(false));
+  }, [id]);
+
+  useEffect(() => {
+    setActiveMediaLoadError(false);
+  }, [activeMediaIndex, listing?.id]);
+
+  if (isLoading) {
+    return (
+      <div className="rounded-xl border border-slate-200 bg-white p-6 text-sm text-slate-600 page-enter">
+        Chargement de l'annonce...
+      </div>
+    );
+  }
+
+  if (error || !listing) {
+    return (
+      <div className="rounded-xl border border-rose-200 bg-rose-50 p-6 text-sm text-rose-700 page-enter">
+        {error || "Annonce introuvable."}
+      </div>
+    );
+  }
+
+  const activeMediaUrl = listing.images[activeMediaIndex] || listing.images[0] || "";
+  const activeIsVideo = activeMediaUrl ? isVideoMedia(activeMediaUrl) : false;
+
+  return (
+    <article className="space-y-6 page-enter">
+      <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-soft">
+        <div className="h-72 w-full bg-slate-100 sm:h-[26rem]">
+          {activeMediaUrl && !activeMediaLoadError ? (
+            activeIsVideo ? (
+              <video
+                src={activeMediaUrl}
+                controls
+                onError={() => setActiveMediaLoadError(true)}
+                className="h-full w-full object-cover"
+              />
+            ) : (
+              <img
+                src={activeMediaUrl}
+                alt={listing.title}
+                onError={() => setActiveMediaLoadError(true)}
+                className="h-full w-full object-cover"
+              />
+            )
+          ) : (
+            <div className="h-full w-full bg-gradient-to-br from-brand-100 via-white to-accent-500/20" />
+          )}
+        </div>
+        <div className="space-y-5 p-6">
+          <div>
+            <p className="text-sm font-semibold text-brand-700">{listing.categoryName}</p>
+            <h1 className="font-heading text-3xl font-bold text-slate-900">{listing.title}</h1>
+            <p className="mt-2 text-3xl font-bold text-brand-700">
+              {listing.price.toLocaleString("fr-CA")} {listing.priceCurrency}
+            </p>
+            {listing.negotiable && (
+              <p className="mt-2 inline-flex rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-700">
+                Prix negociable
+              </p>
+            )}
+          </div>
+
+          <div className="grid gap-3 rounded-2xl bg-slate-50 p-4 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="flex items-center gap-2 text-sm text-slate-700">
+              <FireIcon className="h-5 w-5 text-brand-600" />
+              Carburant: {listing.fuel || "N/A"}
+            </div>
+            <div className="flex items-center gap-2 text-sm text-slate-700">
+              <CheckBadgeIcon className="h-5 w-5 text-brand-600" />
+              Transmission: {listing.transmission || "N/A"}
+            </div>
+            <div className="flex items-center gap-2 text-sm text-slate-700">
+              <TruckIcon className="h-5 w-5 text-brand-600" />
+              Kilometrage: {listing.mileage ? `${listing.mileage.toLocaleString("fr-CA")} km` : "N/A"}
+            </div>
+            <div className="flex items-center gap-2 text-sm text-slate-700">
+              <CalendarDaysIcon className="h-5 w-5 text-brand-600" />
+              Annee: {listing.year || "N/A"}
+            </div>
+            <div className="flex items-center gap-2 text-sm text-slate-700">
+              <MapPinIcon className="h-5 w-5 text-brand-600" />
+              Ville: {listing.city || listing.location || "N/A"}
+            </div>
+            <div className="flex items-center gap-2 text-sm text-slate-700">
+              <MapPinIcon className="h-5 w-5 text-brand-600" />
+              Etat: {listing.itemState || "N/A"}
+            </div>
+            <div className="flex items-center gap-2 text-sm text-slate-700">
+              <PhoneIcon className="h-5 w-5 text-brand-600" />
+              Telephone: {listing.phone || "N/A"}
+            </div>
+            <div className="flex items-center gap-2 text-sm text-slate-700">
+              <CheckBadgeIcon className="h-5 w-5 text-brand-600" />
+              Livraison: {listing.delivery === null ? "N/A" : listing.delivery ? "Oui" : "Non"}
+            </div>
+            <div className="flex items-center gap-2 text-sm text-slate-700">
+              <CheckBadgeIcon className="h-5 w-5 text-brand-600" />
+              Export:{" "}
+              {listing.exportAvailable === null ? "N/A" : listing.exportAvailable ? "Disponible" : "Non"}
+            </div>
+            <div className="flex items-center gap-2 text-sm text-slate-700">
+              <CheckBadgeIcon className="h-5 w-5 text-brand-600" />
+              Statut: {listing.status || "N/A"}
+            </div>
+          </div>
+
+          <section>
+            <h2 className="font-heading text-xl font-semibold text-slate-900">Description</h2>
+            <p className="mt-2 whitespace-pre-line text-slate-700">{listing.description}</p>
+          </section>
+
+          {listing.images.length > 1 && (
+            <section>
+              <h2 className="font-heading text-xl font-semibold text-slate-900">
+                Galerie media ({listing.images.length})
+              </h2>
+              <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {listing.images.map((url, index) => {
+                  const isVideo = isVideoMedia(url);
+                  const isActive = index === activeMediaIndex;
+
+                  return (
+                    <button
+                      key={`${url}-${index}`}
+                      type="button"
+                      onClick={() => setActiveMediaIndex(index)}
+                      className={`overflow-hidden rounded-xl border bg-white text-left transition ${
+                        isActive
+                          ? "border-brand-500 ring-2 ring-brand-200"
+                          : "border-slate-200 hover:border-brand-300"
+                      }`}
+                    >
+                      <div className="h-28 w-full bg-slate-100">
+                        {isVideo ? (
+                          <video
+                            src={url}
+                            muted
+                            loop
+                            autoPlay
+                            playsInline
+                            preload="metadata"
+                            className="h-full w-full object-cover"
+                          />
+                        ) : (
+                          <img
+                            src={url}
+                            alt={`${listing.title} media ${index + 1}`}
+                            className="h-full w-full object-cover"
+                          />
+                        )}
+                      </div>
+                      <div className="px-2 py-1 text-xs text-slate-600">
+                        {isVideo ? "Video" : "Photo"} {index + 1}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </section>
+          )}
+
+          <div className="flex flex-wrap gap-3">
+            <Link
+              to={`/contact?listing=${listing.id}&title=${encodeURIComponent(listing.title)}`}
+              className="rounded-xl bg-brand-600 px-5 py-3 text-sm font-semibold text-white hover:bg-brand-700"
+            >
+              Contacter
+            </Link>
+            <Link
+              to="/annonces"
+              className="rounded-xl border border-slate-300 px-5 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-100"
+            >
+              Retour aux annonces
+            </Link>
+          </div>
+        </div>
+      </div>
+    </article>
+  );
+}

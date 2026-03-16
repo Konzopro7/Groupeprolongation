@@ -1,0 +1,28 @@
+import { Route, Routes } from "react-router-dom";
+import Layout from "./components/Layout";
+import AdminPage from "./pages/AdminPage";
+import AboutPage from "./pages/AboutPage";
+import ContactPage from "./pages/ContactPage";
+import HomePage from "./pages/HomePage";
+import ListingDetailsPage from "./pages/ListingDetailsPage";
+import ListingsPage from "./pages/ListingsPage";
+import NotFoundPage from "./pages/NotFoundPage";
+import PublishPage from "./pages/PublishPage";
+
+export default function App() {
+  return (
+    <Routes>
+      <Route element={<Layout />}>
+        <Route path="/" element={<HomePage />} />
+        <Route path="/annonces" element={<ListingsPage />} />
+        <Route path="/annonces/:id" element={<ListingDetailsPage />} />
+        <Route path="/publier" element={<PublishPage />} />
+        <Route path="/publier/:id" element={<PublishPage />} />
+        <Route path="/admin" element={<AdminPage />} />
+        <Route path="/a-propos" element={<AboutPage />} />
+        <Route path="/contact" element={<ContactPage />} />
+        <Route path="*" element={<NotFoundPage />} />
+      </Route>
+    </Routes>
+  );
+}

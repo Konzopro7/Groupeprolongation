@@ -1,0 +1,714 @@
+import {
+  Category,
+  ContactPayload,
+  Listing,
+  ListingFilters,
+  NewListingPayload,
+} from "../types";
+
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "/api";
+const USE_MOCK = import.meta.env.VITE_ENABLE_MOCK === "true";
+
+const MOCK_CATEGORIES_KEY = "gp_mock_categories_v2";
+const MOCK_LISTINGS_KEY = "gp_mock_listings_v2";
+const MOCK_CONTACTS_KEY = "gp_mock_contacts_v2";
+const MOCK_ADMIN_SESSION_KEY = "gp_mock_admin_session_v2";
+const MAX_MEDIA_ITEMS = 20;
+
+function toCanonicalMediaReference(value: string): string {
+  const trimmed = String(value || "").trim();
+  if (!trimmed) {
+    return "";
+  }
+
+  // Un chemin local Windows (C:\...) n'est pas affichable depuis le navigateur.
+  if (/^[a-zA-Z]:[\\/]/.test(trimmed)) {
+    return "";
+  }
+
+  if (/^(?:https?:|data:|blob:)/i.test(trimmed)) {
+    if (/^https?:/i.test(trimmed)) {
+      try {
+        const parsed = new URL(trimmed);
+        if (parsed.pathname.startsWith("/api/uploads/")) {
+          return `${parsed.pathname}${parsed.search}${parsed.hash}`;
+        }
+        return parsed.toString();
+      } catch {
+        return "";
+      }
+    }
+    return trimmed;
+  }
+
+  // Rejette les schemas non supportes (ex: ftp:, file:, c:).
+  if (/^[a-z][a-z0-9+.-]*:/i.test(trimmed)) {
+    return "";
+  }
+
+  if (trimmed.startsWith("//")) {
+    const protocol = typeof window !== "undefined" ? window.location.protocol : "https:";
+    return `${protocol}${trimmed}`;
+  }
+
+  if (trimmed.startsWith("/")) {
+    return trimmed;
+  }
+
+  if (trimmed.startsWith("api/")) {
+    return `/${trimmed}`;
+  }
+
+  return trimmed;
+}
+
+function normalizeMediaArray(values: unknown[]): string[] {
+  const normalized = values
+    .filter((entry): entry is string => typeof entry === "string")
+    .map((entry) => toCanonicalMediaReference(entry))
+    .filter((entry) => entry !== "");
+
+  return Array.from(new Set(normalized)).slice(0, MAX_MEDIA_ITEMS);
+}
+
+interface AdminSessionResponse {
+  authenticated: boolean;
+  username: string | null;
+}
+
+export class ApiError extends Error {
+  status: number;
+  details?: Record<string, string>;
+
+  constructor(message: string, status: number, details?: Record<string, string>) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+    this.details = details;
+  }
+}
+
+type ApiResponse<T> = {
+  data: T;
+};
+
+function toNumberOrNull(value: unknown): number | null {
+  if (value === null || value === undefined || value === "") {
+    return null;
+  }
+
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function toBooleanOrNull(value: unknown): boolean | null {
+  if (value === null || value === undefined || value === "") {
+    return null;
+  }
+  if (typeof value === "boolean") {
+    return value;
+  }
+  if (typeof value === "number") {
+    return value === 1;
+  }
+  const normalized = String(value).toLowerCase();
+  if (normalized === "1" || normalized === "true" || normalized === "yes") return true;
+  if (normalized === "0" || normalized === "false" || normalized === "no") return false;
+  return null;
+}
+
+function mapListing(raw: Record<string, unknown>): Listing {
+  let images: string[] = [];
+  if (Array.isArray(raw.images)) {
+    images = normalizeMediaArray(raw.images);
+  }
+
+  const city = (raw.city as string | null) ?? null;
+  const legacyLocation = (raw.location as string | null) ?? null;
+
+  return {
+    id: Number(raw.id),
+    title: String(raw.title ?? ""),
+    description: String(raw.description ?? ""),
+    price: Number(raw.price ?? 0),
+    categoryId: Number(raw.category_id ?? 0),
+    categoryName: String(raw.category_name ?? ""),
+    fuel: (raw.fuel as string | null) ?? null,
+    transmission: (raw.transmission as string | null) ?? null,
+    delivery: toBooleanOrNull(raw.delivery),
+    exportAvailable: toBooleanOrNull(raw.export_available),
+    status: (raw.status as string | null) ?? null,
+    mileage: toNumberOrNull(raw.mileage),
+    year: toNumberOrNull(raw.year),
+    negotiable: toBooleanOrNull(raw.negotiable),
+    phone: (raw.phone as string | null) ?? null,
+    city,
+    itemState: (raw.item_state as string | null) ?? null,
+    priceCurrency: String(raw.price_currency ?? "CAD"),
+    location: city || legacyLocation,
+    images,
+    createdAt: String(raw.created_at ?? ""),
+  };
+}
+
+function readStorage<T>(key: string, fallback: T): T {
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return fallback;
+    return JSON.parse(raw) as T;
+  } catch {
+    return fallback;
+  }
+}
+
+function writeStorage<T>(key: string, value: T) {
+  localStorage.setItem(key, JSON.stringify(value));
+}
+
+function getSeedCategories(): Category[] {
+  return [
+    { id: 1, name: "Automobile", slug: "automobile", parentId: null },
+    { id: 2, name: "Accessoires", slug: "accessoires", parentId: 1 },
+    { id: 3, name: "Berline", slug: "berline", parentId: 1 },
+    { id: 4, name: "Camionnette", slug: "camionnette", parentId: 1 },
+    { id: 5, name: "Pieces", slug: "pieces-auto", parentId: 1 },
+    { id: 6, name: "SUV", slug: "suv", parentId: 1 },
+    { id: 7, name: "Voitures", slug: "voiture", parentId: 1 },
+    { id: 8, name: "Autres", slug: "autre", parentId: null },
+    { id: 9, name: "Bicyclette", slug: "bicyclette", parentId: null },
+    { id: 10, name: "Electromenagers", slug: "electromenagers", parentId: null },
+    { id: 11, name: "Cuisine", slug: "cuisine", parentId: 10 },
+    { id: 12, name: "Entretien", slug: "entretien", parentId: 10 },
+    { id: 13, name: "Moto", slug: "moto", parentId: null },
+    { id: 14, name: "Usagers", slug: "usagers", parentId: null },
+    { id: 15, name: "Vetements", slug: "vetements", parentId: null },
+  ];
+}
+
+function sortCategories(categories: Category[]): Category[] {
+  const byId = new Map<number, Category>();
+  categories.forEach((entry) => byId.set(entry.id, entry));
+
+  const roots = categories
+    .filter((entry) => entry.parentId === null)
+    .sort((a, b) => a.name.localeCompare(b.name, "fr"));
+  const childrenByParent = new Map<number, Category[]>();
+  categories
+    .filter((entry) => entry.parentId !== null)
+    .forEach((entry) => {
+      const parentId = entry.parentId as number;
+      const current = childrenByParent.get(parentId) || [];
+      current.push(entry);
+      childrenByParent.set(parentId, current);
+    });
+
+  childrenByParent.forEach((list) => list.sort((a, b) => a.name.localeCompare(b.name, "fr")));
+
+  const ordered: Category[] = [];
+  roots.forEach((root) => {
+    ordered.push(root);
+    const children = childrenByParent.get(root.id) || [];
+    children.forEach((child) => {
+      if (byId.has(child.id)) {
+        ordered.push(child);
+      }
+    });
+  });
+
+  return ordered;
+}
+
+function getSeedListings(categories: Category[]): Listing[] {
+  return [
+    {
+      id: 1,
+      title: "Toyota Corolla SE 2022",
+      description:
+        "Vehicule en excellent etat, entretien regulier, pneus hiver inclus, aucune reparation a prevoir.",
+      price: 24800,
+      categoryId: 7,
+      categoryName: categories.find((c) => c.id === 7)?.name || "Voitures",
+      fuel: "Essence",
+      transmission: "Automatique",
+      delivery: true,
+      exportAvailable: false,
+      status: "Disponible",
+      mileage: 36000,
+      year: 2022,
+      negotiable: true,
+      phone: "+1 514 555 1240",
+      city: "Montreal",
+      itemState: "Occasion",
+      priceCurrency: "CAD",
+      location: "Montreal",
+      images: ["https://images.unsplash.com/photo-1549921296-3a6b0e8dd1e0?auto=format&fit=crop&w=1200&q=80"],
+      createdAt: new Date().toISOString(),
+    },
+    {
+      id: 2,
+      title: "Nissan Rogue 2021 SUV",
+      description:
+        "SUV tres propre, interieur impeccable, traction integrale, ideal pour famille et route d hiver.",
+      price: 31900,
+      categoryId: 6,
+      categoryName: categories.find((c) => c.id === 6)?.name || "SUV",
+      fuel: "Essence",
+      transmission: "Automatique",
+      delivery: false,
+      exportAvailable: true,
+      status: "Disponible",
+      mileage: 49000,
+      year: 2021,
+      negotiable: false,
+      phone: "+1 438 555 7788",
+      city: "Laval",
+      itemState: "Occasion",
+      priceCurrency: "CAD",
+      location: "Laval",
+      images: ["https://images.unsplash.com/photo-1494905998402-395d579af36f?auto=format&fit=crop&w=1200&q=80"],
+      createdAt: new Date().toISOString(),
+    },
+    {
+      id: 3,
+      title: "Yamaha MT-07 2020",
+      description:
+        "Moto performante et fiable, entretien fait en concession, tenue de route excellente, aucun accident.",
+      price: 9200,
+      categoryId: 13,
+      categoryName: categories.find((c) => c.id === 13)?.name || "Moto",
+      fuel: "Essence",
+      transmission: "Manuelle",
+      delivery: false,
+      exportAvailable: false,
+      status: "Disponible",
+      mileage: 18000,
+      year: 2020,
+      negotiable: true,
+      phone: "+1 450 555 3344",
+      city: "Quebec",
+      itemState: "Bon etat",
+      priceCurrency: "CAD",
+      location: "Quebec",
+      images: ["https://images.unsplash.com/photo-1558981806-ec527fa84c39?auto=format&fit=crop&w=1200&q=80"],
+      createdAt: new Date().toISOString(),
+    },
+  ];
+}
+
+function ensureMockData() {
+  const categories = readStorage<Category[]>(MOCK_CATEGORIES_KEY, []);
+  if (categories.length === 0) {
+    const seededCategories = getSeedCategories();
+    writeStorage(MOCK_CATEGORIES_KEY, seededCategories);
+    writeStorage(MOCK_LISTINGS_KEY, getSeedListings(seededCategories));
+  }
+}
+
+function getMockCategories(): Category[] {
+  ensureMockData();
+  return readStorage<Category[]>(MOCK_CATEGORIES_KEY, []);
+}
+
+function getMockListings(): Listing[] {
+  ensureMockData();
+  return readStorage<Listing[]>(MOCK_LISTINGS_KEY, []);
+}
+
+function saveMockListings(listings: Listing[]) {
+  writeStorage(MOCK_LISTINGS_KEY, listings);
+}
+
+function getMockAdminSession(): AdminSessionResponse {
+  return readStorage<AdminSessionResponse>(MOCK_ADMIN_SESSION_KEY, {
+    authenticated: false,
+    username: null,
+  });
+}
+
+function setMockAdminSession(session: AdminSessionResponse) {
+  writeStorage(MOCK_ADMIN_SESSION_KEY, session);
+}
+
+function filterMockListings(listings: Listing[], filters: ListingFilters): Listing[] {
+  return listings
+    .filter((item) => {
+      if (filters.categoryId && item.categoryId !== filters.categoryId) return false;
+      if (filters.fuel && item.fuel !== filters.fuel) return false;
+      if (filters.minPrice !== undefined && item.price < filters.minPrice) return false;
+      if (filters.maxPrice !== undefined && item.price > filters.maxPrice) return false;
+      if (filters.q) {
+        const term = filters.q.toLowerCase();
+        const haystack = `${item.title} ${item.description} ${item.city || ""}`.toLowerCase();
+        if (!haystack.includes(term)) return false;
+      }
+      return true;
+    })
+    .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))
+    .slice(0, filters.limit ?? 100);
+}
+
+async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const headers = new Headers(init.headers || {});
+  const isFormData = init.body instanceof FormData;
+  if (!headers.has("Content-Type") && init.body && !isFormData) {
+    headers.set("Content-Type", "application/json");
+  }
+  headers.set("Accept", "application/json");
+
+  const response = await fetch(`${API_BASE_URL}${path}`, {
+    ...init,
+    credentials: "same-origin",
+    headers,
+  });
+
+  const rawText = await response.text();
+  let payload: unknown = {};
+  if (rawText) {
+    try {
+      payload = JSON.parse(rawText);
+    } catch {
+      payload = {};
+    }
+  }
+
+  if (!response.ok) {
+    const errorPayload = payload as { error?: string; details?: Record<string, string> };
+    throw new ApiError(
+      errorPayload.error || "Une erreur est survenue cote serveur.",
+      response.status,
+      errorPayload.details,
+    );
+  }
+
+  return payload as T;
+}
+
+async function fileToDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(new Error("Lecture du fichier impossible."));
+    reader.readAsDataURL(file);
+  });
+}
+
+async function filesToDataUrls(files: File[]): Promise<string[]> {
+  return Promise.all(files.map((file) => fileToDataUrl(file)));
+}
+
+export async function fetchCategories(): Promise<Category[]> {
+  if (USE_MOCK) {
+    return sortCategories(getMockCategories());
+  }
+
+  const response = await request<ApiResponse<Array<Record<string, unknown>>>>("/categories");
+  const categories = response.data.map((raw) => ({
+    id: Number(raw.id),
+    name: String(raw.name ?? ""),
+    slug: String(raw.slug ?? ""),
+    parentId:
+      raw.parent_id === null || raw.parent_id === undefined || raw.parent_id === ""
+        ? null
+        : Number(raw.parent_id),
+  }));
+  return sortCategories(categories);
+}
+
+export async function fetchListings(filters: ListingFilters = {}): Promise<Listing[]> {
+  if (USE_MOCK) {
+    return filterMockListings(getMockListings(), filters);
+  }
+
+  const params = new URLSearchParams();
+  if (filters.categoryId) params.set("category_id", String(filters.categoryId));
+  if (filters.q) params.set("q", filters.q);
+  if (filters.fuel) params.set("fuel", filters.fuel);
+  if (filters.minPrice !== undefined) params.set("min_price", String(filters.minPrice));
+  if (filters.maxPrice !== undefined) params.set("max_price", String(filters.maxPrice));
+  if (filters.limit !== undefined) params.set("limit", String(filters.limit));
+
+  const query = params.toString() ? `?${params.toString()}` : "";
+  const response = await request<ApiResponse<Array<Record<string, unknown>>>>(`/listings${query}`);
+  return response.data.map(mapListing);
+}
+
+export async function fetchListingById(id: number): Promise<Listing> {
+  if (USE_MOCK) {
+    const listing = getMockListings().find((item) => item.id === id);
+    if (!listing) {
+      throw new ApiError("Annonce introuvable.", 404);
+    }
+    return listing;
+  }
+
+  const response = await request<ApiResponse<Record<string, unknown>>>(`/listings/${id}`);
+  return mapListing(response.data);
+}
+
+export async function createListing(payload: NewListingPayload): Promise<Listing> {
+  const normalizedMediaUrls = normalizeMediaArray(payload.mediaUrls ?? []);
+  const normalizedImageUrl = toCanonicalMediaReference(payload.imageUrl ?? "");
+  const finalMediaUrls =
+    normalizedMediaUrls.length > 0
+      ? normalizedMediaUrls
+      : normalizedImageUrl
+        ? [normalizedImageUrl]
+        : [];
+
+  if (USE_MOCK) {
+    const session = getMockAdminSession();
+    if (!session.authenticated) {
+      throw new ApiError("Authentification admin requise.", 401);
+    }
+
+    const listings = getMockListings();
+    const categories = getMockCategories();
+    const id = listings.length > 0 ? Math.max(...listings.map((item) => item.id)) + 1 : 1;
+    const category = categories.find((item) => item.id === payload.categoryId);
+
+    const created: Listing = {
+      id,
+      title: payload.title,
+      description: payload.description,
+      price: payload.price,
+      categoryId: payload.categoryId,
+      categoryName: category?.name || "Categorie",
+      fuel: payload.fuel || null,
+      transmission: payload.transmission || null,
+      delivery: payload.delivery ?? null,
+      exportAvailable: payload.exportAvailable ?? null,
+      status: payload.status || "Disponible",
+      mileage: payload.mileage ?? null,
+      year: payload.year ?? null,
+      negotiable: payload.negotiable ?? null,
+      phone: payload.phone || null,
+      city: payload.city || null,
+      itemState: payload.itemState || null,
+      priceCurrency: payload.priceCurrency || "CAD",
+      location: payload.city || payload.location || null,
+      images: finalMediaUrls,
+      createdAt: new Date().toISOString(),
+    };
+
+    saveMockListings([created, ...listings]);
+    return created;
+  }
+
+  const response = await request<ApiResponse<Record<string, unknown>>>("/listings", {
+    method: "POST",
+    body: JSON.stringify({
+      title: payload.title,
+      description: payload.description,
+      price: payload.price,
+      category_id: payload.categoryId,
+      fuel: payload.fuel,
+      transmission: payload.transmission,
+      delivery: payload.delivery,
+      export_available: payload.exportAvailable,
+      status: payload.status,
+      mileage: payload.mileage,
+      year: payload.year,
+      negotiable: payload.negotiable,
+      phone: payload.phone,
+      city: payload.city,
+      item_state: payload.itemState,
+      price_currency: payload.priceCurrency || "CAD",
+      location: payload.location || payload.city,
+      images: finalMediaUrls.length > 0 ? finalMediaUrls : undefined,
+      image_url: finalMediaUrls[0],
+    }),
+  });
+
+  return mapListing(response.data);
+}
+
+export async function updateListing(id: number, payload: NewListingPayload): Promise<Listing> {
+  const normalizedMediaUrls = normalizeMediaArray(payload.mediaUrls ?? []);
+  const normalizedImageUrl = toCanonicalMediaReference(payload.imageUrl ?? "");
+  const finalMediaUrls =
+    normalizedMediaUrls.length > 0
+      ? normalizedMediaUrls
+      : normalizedImageUrl
+        ? [normalizedImageUrl]
+        : [];
+
+  if (USE_MOCK) {
+    const session = getMockAdminSession();
+    if (!session.authenticated) {
+      throw new ApiError("Authentification admin requise.", 401);
+    }
+
+    const listings = getMockListings();
+    const categories = getMockCategories();
+    const index = listings.findIndex((item) => item.id === id);
+    if (index < 0) {
+      throw new ApiError("Annonce introuvable.", 404);
+    }
+
+    const category = categories.find((item) => item.id === payload.categoryId);
+    const current = listings[index];
+    const updated: Listing = {
+      ...current,
+      title: payload.title,
+      description: payload.description,
+      price: payload.price,
+      categoryId: payload.categoryId,
+      categoryName: category?.name || current.categoryName,
+      fuel: payload.fuel || null,
+      transmission: payload.transmission || null,
+      delivery: payload.delivery ?? null,
+      exportAvailable: payload.exportAvailable ?? null,
+      status: payload.status || "Disponible",
+      mileage: payload.mileage ?? null,
+      year: payload.year ?? null,
+      negotiable: payload.negotiable ?? null,
+      phone: payload.phone || null,
+      city: payload.city || null,
+      itemState: payload.itemState || null,
+      priceCurrency: payload.priceCurrency || current.priceCurrency || "CAD",
+      location: payload.city || payload.location || null,
+      images: finalMediaUrls,
+    };
+
+    const next = [...listings];
+    next[index] = updated;
+    saveMockListings(next);
+    return updated;
+  }
+
+  const response = await request<ApiResponse<Record<string, unknown>>>(`/listings/${id}`, {
+    method: "PUT",
+    body: JSON.stringify({
+      title: payload.title,
+      description: payload.description,
+      price: payload.price,
+      category_id: payload.categoryId,
+      fuel: payload.fuel,
+      transmission: payload.transmission,
+      delivery: payload.delivery,
+      export_available: payload.exportAvailable,
+      status: payload.status,
+      mileage: payload.mileage,
+      year: payload.year,
+      negotiable: payload.negotiable,
+      phone: payload.phone,
+      city: payload.city,
+      item_state: payload.itemState,
+      price_currency: payload.priceCurrency || "CAD",
+      location: payload.location || payload.city,
+      images: finalMediaUrls.length > 0 ? finalMediaUrls : undefined,
+      image_url: finalMediaUrls[0],
+    }),
+  });
+
+  return mapListing(response.data);
+}
+
+export async function deleteListing(id: number): Promise<void> {
+  if (USE_MOCK) {
+    const session = getMockAdminSession();
+    if (!session.authenticated) {
+      throw new ApiError("Authentification admin requise.", 401);
+    }
+
+    const listings = getMockListings();
+    saveMockListings(listings.filter((item) => item.id !== id));
+    return;
+  }
+
+  await request<ApiResponse<{ success: boolean }>>(`/listings/${id}`, {
+    method: "DELETE",
+  });
+}
+
+export async function uploadListingFiles(files: File[]): Promise<string[]> {
+  if (files.length === 0) {
+    return [];
+  }
+
+  if (USE_MOCK) {
+    const session = getMockAdminSession();
+    if (!session.authenticated) {
+      throw new ApiError("Authentification admin requise.", 401);
+    }
+
+    return filesToDataUrls(files);
+  }
+
+  const formData = new FormData();
+  files.forEach((file) => formData.append("media[]", file));
+
+  const response = await request<ApiResponse<{ urls?: string[]; url?: string }>>("/uploads", {
+    method: "POST",
+    body: formData,
+  });
+
+  if (Array.isArray(response.data.urls) && response.data.urls.length > 0) {
+    return normalizeMediaArray(response.data.urls);
+  }
+
+  if (typeof response.data.url === "string" && response.data.url.trim() !== "") {
+    const normalized = toCanonicalMediaReference(response.data.url);
+    return normalized ? [normalized] : [];
+  }
+
+  return [];
+}
+
+export async function uploadListingImage(file: File): Promise<string> {
+  const urls = await uploadListingFiles([file]);
+  if (urls.length === 0) {
+    throw new ApiError("Aucun media upload valide.", 422);
+  }
+  return urls[0];
+}
+
+export async function sendContactMessage(payload: ContactPayload): Promise<void> {
+  if (USE_MOCK) {
+    const current = readStorage<ContactPayload[]>(MOCK_CONTACTS_KEY, []);
+    writeStorage(MOCK_CONTACTS_KEY, [...current, payload]);
+    return;
+  }
+
+  await request<ApiResponse<{ success: boolean }>>("/contact", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function fetchAdminSession(): Promise<AdminSessionResponse> {
+  if (USE_MOCK) {
+    return getMockAdminSession();
+  }
+
+  const response = await request<ApiResponse<AdminSessionResponse>>("/auth/me");
+  return response.data;
+}
+
+export async function loginAdmin(username: string, password: string): Promise<AdminSessionResponse> {
+  if (USE_MOCK) {
+    if (username === "admin" && password === "admin123") {
+      const session = { authenticated: true, username: "admin" };
+      setMockAdminSession(session);
+      return session;
+    }
+    throw new ApiError("Identifiants invalides.", 401);
+  }
+
+  const response = await request<ApiResponse<AdminSessionResponse>>("/auth/login", {
+    method: "POST",
+    body: JSON.stringify({ username, password }),
+  });
+  return response.data;
+}
+
+export async function logoutAdmin(): Promise<void> {
+  if (USE_MOCK) {
+    setMockAdminSession({ authenticated: false, username: null });
+    return;
+  }
+
+  await request<ApiResponse<{ success: boolean }>>("/auth/logout", {
+    method: "POST",
+  });
+}
