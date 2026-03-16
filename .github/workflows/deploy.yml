@@ -75,6 +75,7 @@ jobs:
 
           mkdir -p deploy/public_html/api/uploads
           cp backend/public/uploads/.gitkeep deploy/public_html/api/uploads/.gitkeep
+          cp backend/public/uploads/.htaccess deploy/public_html/api/uploads/.htaccess
 
       - name: Deploy Via FTP
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5
@@ -87,3 +88,21 @@ jobs:
           local-dir: ./deploy/public_html/
           server-dir: ${{ secrets.FTP_SERVER_DIR }}
           dangerous-clean-slate: false
+          exclude: |
+            **/.git*
+            **/.git*/**
+            **/node_modules/**
+            api/uploads/[0-9]*_*.jpg
+            api/uploads/[0-9]*_*.jpeg
+            api/uploads/[0-9]*_*.png
+            api/uploads/[0-9]*_*.webp
+            api/uploads/[0-9]*_*.gif
+            api/uploads/[0-9]*_*.bmp
+            api/uploads/[0-9]*_*.avif
+            api/uploads/[0-9]*_*.mp4
+            api/uploads/[0-9]*_*.webm
+            api/uploads/[0-9]*_*.ogv
+            api/uploads/[0-9]*_*.ogg
+            api/uploads/[0-9]*_*.mov
+            api/uploads/[0-9]*_*.mpeg
+            api/uploads/[0-9]*_*.mpg

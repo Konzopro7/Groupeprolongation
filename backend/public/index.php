@@ -294,6 +294,127 @@ function getAllowedMediaMimeMap(): array
     ];
 }
 
+function getResolvedUploadDir(array $config): string
+{
+    $uploadDir = trim((string)($config['app']['uploads_dir'] ?? ''));
+    if ($uploadDir === '') {
+        return __DIR__ . '/uploads';
+    }
+
+    return $uploadDir;
+}
+
+function detectMimeTypeByExtension(string $filePath): string
+{
+    $extension = strtolower((string)pathinfo($filePath, PATHINFO_EXTENSION));
+    $mimeByExt = [
+        'jpg' => 'image/jpeg',
+        'jpeg' => 'image/jpeg',
+        'png' => 'image/png',
+        'webp' => 'image/webp',
+        'gif' => 'image/gif',
+        'bmp' => 'image/bmp',
+        'avif' => 'image/avif',
+        'mp4' => 'video/mp4',
+        'mpeg' => 'video/mpeg',
+        'mpg' => 'video/mpeg',
+        'mov' => 'video/quicktime',
+        'webm' => 'video/webm',
+        'ogv' => 'video/ogg',
+        'ogg' => 'video/ogg',
+    ];
+
+    return $mimeByExt[$extension] ?? 'application/octet-stream';
+}
+
+function detectMimeTypeFromFile(string $filePath): string
+{
+    $mimeType = '';
+
+    if (function_exists('finfo_open')) {
+        $finfo = finfo_open(FILEINFO_MIME_TYPE);
+        if ($finfo !== false) {
+            $detected = finfo_file($finfo, $filePath);
+            if (is_string($detected) && trim($detected) !== '') {
+                $mimeType = trim(explode(';', $detected)[0]);
+            }
+            finfo_close($finfo);
+        }
+    }
+
+    if ($mimeType === '' && function_exists('mime_content_type')) {
+        $detected = mime_content_type($filePath);
+        if (is_string($detected) && trim($detected) !== '') {
+            $mimeType = trim(explode(';', $detected)[0]);
+        }
+    }
+
+    if ($mimeType === '') {
+        return detectMimeTypeByExtension($filePath);
+    }
+
+    return strtolower($mimeType);
+}
+
+function streamUploadedMedia(array $config, string $fileName, bool $headOnly = false): void
+{
+    if (preg_match('/^[a-zA-Z0-9._-]+$/', $fileName) !== 1) {
+        errorResponse('Fichier media invalide.', 404);
+        return;
+    }
+
+    $uploadDir = getResolvedUploadDir($config);
+    $basePath = realpath($uploadDir);
+    if ($basePath === false || !is_dir($basePath)) {
+        errorResponse('Fichier media introuvable.', 404);
+        return;
+    }
+
+    $basePrefix = rtrim($basePath, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR;
+    $candidatePath = $basePrefix . $fileName;
+    $filePath = realpath($candidatePath);
+
+    if ($filePath === false || !str_starts_with($filePath, $basePrefix) || !is_file($filePath)) {
+        errorResponse('Fichier media introuvable.', 404);
+        return;
+    }
+
+    $size = filesize($filePath);
+    if ($size === false) {
+        errorResponse('Impossible de lire le media.', 500);
+        return;
+    }
+
+    $mimeType = detectMimeTypeFromFile($filePath);
+
+    http_response_code(200);
+    header('Content-Type: ' . $mimeType);
+    header('Content-Length: ' . (string)$size);
+    header('Cache-Control: public, max-age=31536000, immutable');
+    header('X-Content-Type-Options: nosniff');
+
+    if ($headOnly) {
+        return;
+    }
+
+    $stream = fopen($filePath, 'rb');
+    if ($stream === false) {
+        errorResponse('Impossible de lire le media.', 500);
+        return;
+    }
+
+    while (!feof($stream)) {
+        $chunk = fread($stream, 8192);
+        if ($chunk === false) {
+            fclose($stream);
+            errorResponse('Erreur de lecture media.', 500);
+            return;
+        }
+        echo $chunk;
+    }
+    fclose($stream);
+}
+
 function detectUploadedMimeType(string $tmpName, string $originalName): string
 {
     $mimeType = '';
@@ -364,10 +485,7 @@ function handleUploadRoute(array $config): void
         $maxUploadSize = 25 * 1024 * 1024;
     }
 
-    $uploadDir = trim((string)($config['app']['uploads_dir'] ?? ''));
-    if ($uploadDir === '') {
-        $uploadDir = __DIR__ . '/uploads';
-    }
+    $uploadDir = getResolvedUploadDir($config);
 
     if (!is_dir($uploadDir) && !mkdir($uploadDir, 0755, true) && !is_dir($uploadDir)) {
         errorResponse('Impossible de creer le dossier upload.', 500);
@@ -459,6 +577,7 @@ function handleUploadRoute(array $config): void
             return;
         }
 
+        @chmod($destination, 0644);
         $savedPaths[] = $destination;
         $savedUrls[] = $uploadsUrlBase . '/' . $fileName;
     }
@@ -505,6 +624,14 @@ try {
             return;
         }
         handleUploadRoute($config);
+        return;
+    }
+
+    if (
+        preg_match('#^/uploads/([a-zA-Z0-9._-]+)$#', $path, $matches) === 1
+        && in_array($method, ['GET', 'HEAD'], true)
+    ) {
+        streamUploadedMedia($config, (string)$matches[1], $method === 'HEAD');
         return;
     }
 
