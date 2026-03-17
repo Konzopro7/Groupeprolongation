@@ -39,9 +39,21 @@ if (session_status() !== PHP_SESSION_ACTIVE) {
 }
 
 $allowedOrigin = $config['app']['allowed_origin'] ?? '*';
-header('Access-Control-Allow-Origin: ' . $allowedOrigin);
-if ($allowedOrigin !== '*') {
+$requestOrigin = $_SERVER['HTTP_ORIGIN'] ?? '';
+$requestOrigin = is_string($requestOrigin) ? trim($requestOrigin) : '';
+
+// If config is '*', echo back the request Origin to allow cookies (credentials).
+// Browsers reject `Access-Control-Allow-Origin: *` when `credentials: include` is used.
+if ($allowedOrigin === '*' && $requestOrigin !== '') {
+    header('Access-Control-Allow-Origin: ' . $requestOrigin);
+    header('Vary: Origin');
     header('Access-Control-Allow-Credentials: true');
+} else {
+    header('Access-Control-Allow-Origin: ' . $allowedOrigin);
+    if ($allowedOrigin !== '*') {
+        header('Access-Control-Allow-Credentials: true');
+        header('Vary: Origin');
+    }
 }
 header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type, Authorization');
