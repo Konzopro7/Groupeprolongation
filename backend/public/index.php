@@ -294,6 +294,55 @@ function getAllowedMediaMimeMap(): array
     ];
 }
 
+function iniSizeToBytes(string $value): int
+{
+    $trimmed = trim($value);
+    if ($trimmed === '') {
+        return 0;
+    }
+
+    $unit = strtolower(substr($trimmed, -1));
+    $numberPart = $trimmed;
+    if (in_array($unit, ['k', 'm', 'g'], true)) {
+        $numberPart = substr($trimmed, 0, -1);
+    } else {
+        $unit = '';
+    }
+
+    if (!is_numeric($numberPart)) {
+        return 0;
+    }
+
+    $bytes = (float)$numberPart;
+    switch ($unit) {
+        case 'g':
+            $bytes *= 1024;
+            // no break
+        case 'm':
+            $bytes *= 1024;
+            // no break
+        case 'k':
+            $bytes *= 1024;
+            break;
+    }
+
+    return (int)round($bytes);
+}
+
+function getUploadErrorMessage(int $errorCode): string
+{
+    return match ($errorCode) {
+        UPLOAD_ERR_INI_SIZE => 'Le fichier depasse la limite upload_max_filesize du serveur.',
+        UPLOAD_ERR_FORM_SIZE => 'Le fichier depasse la limite du formulaire.',
+        UPLOAD_ERR_PARTIAL => 'Le fichier a ete partiellement recu. Reessaie.',
+        UPLOAD_ERR_NO_FILE => 'Aucun fichier n a ete recu.',
+        UPLOAD_ERR_NO_TMP_DIR => 'Dossier temporaire manquant sur le serveur.',
+        UPLOAD_ERR_CANT_WRITE => 'Impossible d ecrire le fichier sur le disque serveur.',
+        UPLOAD_ERR_EXTENSION => 'Upload bloque par une extension PHP du serveur.',
+        default => 'Erreur upload inconnue (code ' . $errorCode . ').',
+    };
+}
+
 function getResolvedUploadDir(array $config): string
 {
     $uploadDir = trim((string)($config['app']['uploads_dir'] ?? ''));
@@ -516,7 +565,15 @@ function handleUploadRoute(array $config): void
 {
     $files = collectIncomingUploadFiles();
     if (empty($files)) {
-        errorResponse('Aucun fichier media recu.', 422);
+        $contentLength = (int)($_SERVER['CONTENT_LENGTH'] ?? 0);
+        $postMaxBytes = iniSizeToBytes((string)ini_get('post_max_size'));
+        if ($postMaxBytes > 0 && $contentLength > $postMaxBytes) {
+            $postMaxLabel = (string)ini_get('post_max_size');
+            errorResponse('Le total des fichiers depasse la limite post_max_size (' . $postMaxLabel . ').', 422);
+            return;
+        }
+
+        errorResponse('Aucun fichier media recu (verifie max_file_uploads, post_max_size et upload_max_filesize).', 422);
         return;
     }
 
@@ -559,7 +616,7 @@ function handleUploadRoute(array $config): void
                     @unlink($path);
                 }
             }
-            errorResponse('Erreur lors de l upload des fichiers media.', 400);
+            errorResponse(getUploadErrorMessage($errorCode), 422);
             return;
         }
 
@@ -626,7 +683,10 @@ function handleUploadRoute(array $config): void
                     @unlink($path);
                 }
             }
-            errorResponse('Impossible de sauvegarder un des fichiers media.', 500);
+            $hint = is_writable($uploadDir)
+                ? 'Le serveur a refuse move_uploaded_file.'
+                : 'Le dossier upload n est pas accessible en ecriture.';
+            errorResponse('Impossible de sauvegarder un des fichiers media. ' . $hint, 500);
             return;
         }
 
