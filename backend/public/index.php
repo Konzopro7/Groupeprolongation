@@ -301,10 +301,64 @@ function getResolvedUploadDir(array $config): string
     $uploadDir = preg_replace('/[[:space:]]*\/[[:space:]]*/', '/', $uploadDir) ?? $uploadDir;
     $uploadDir = trim($uploadDir);
     if ($uploadDir === '') {
-        return __DIR__ . '/uploads';
+        return getDefaultUploadDir();
     }
 
     return $uploadDir;
+}
+
+function getDefaultUploadDir(): string
+{
+    return __DIR__ . '/uploads';
+}
+
+function ensureUploadDirExistsAndWritable(string $path): bool
+{
+    if (!is_dir($path) && !mkdir($path, 0755, true) && !is_dir($path)) {
+        return false;
+    }
+
+    return is_writable($path);
+}
+
+function getCandidateUploadDirs(array $config): array
+{
+    $dirs = [getResolvedUploadDir($config), getDefaultUploadDir()];
+    $unique = [];
+    foreach ($dirs as $dir) {
+        $normalized = rtrim(str_replace(["\r", "\n", "\t"], '', $dir), DIRECTORY_SEPARATOR);
+        if ($normalized === '') {
+            continue;
+        }
+        if (!in_array($normalized, $unique, true)) {
+            $unique[] = $normalized;
+        }
+    }
+
+    return $unique;
+}
+
+function resolveUploadedMediaFilePath(array $config, string $fileName): ?string
+{
+    foreach (getCandidateUploadDirs($config) as $uploadDir) {
+        $basePath = realpath($uploadDir);
+        if ($basePath === false || !is_dir($basePath)) {
+            continue;
+        }
+
+        $basePrefix = rtrim($basePath, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR;
+        $candidatePath = $basePrefix . $fileName;
+        $resolved = realpath($candidatePath);
+        if ($resolved === false) {
+            continue;
+        }
+
+        if (str_starts_with($resolved, $basePrefix) && is_file($resolved)) {
+            return $resolved;
+        }
+    }
+
+    return null;
 }
 
 function detectMimeTypeByExtension(string $filePath): string
@@ -366,18 +420,8 @@ function streamUploadedMedia(array $config, string $fileName, bool $headOnly = f
         return;
     }
 
-    $uploadDir = getResolvedUploadDir($config);
-    $basePath = realpath($uploadDir);
-    if ($basePath === false || !is_dir($basePath)) {
-        errorResponse('Fichier media introuvable.', 404);
-        return;
-    }
-
-    $basePrefix = rtrim($basePath, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR;
-    $candidatePath = $basePrefix . $fileName;
-    $filePath = realpath($candidatePath);
-
-    if ($filePath === false || !str_starts_with($filePath, $basePrefix) || !is_file($filePath)) {
+    $filePath = resolveUploadedMediaFilePath($config, $fileName);
+    if ($filePath === null) {
         errorResponse('Fichier media introuvable.', 404);
         return;
     }
@@ -488,9 +532,15 @@ function handleUploadRoute(array $config): void
         $maxUploadSize = 25 * 1024 * 1024;
     }
 
-    $uploadDir = getResolvedUploadDir($config);
+    $uploadDir = null;
+    foreach (getCandidateUploadDirs($config) as $candidateUploadDir) {
+        if (ensureUploadDirExistsAndWritable($candidateUploadDir)) {
+            $uploadDir = $candidateUploadDir;
+            break;
+        }
+    }
 
-    if (!is_dir($uploadDir) && !mkdir($uploadDir, 0755, true) && !is_dir($uploadDir)) {
+    if ($uploadDir === null) {
         errorResponse('Impossible de creer le dossier upload.', 500);
         return;
     }
