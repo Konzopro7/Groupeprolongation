@@ -297,6 +297,9 @@ function getAllowedMediaMimeMap(): array
 function getResolvedUploadDir(array $config): string
 {
     $uploadDir = trim((string)($config['app']['uploads_dir'] ?? ''));
+    $uploadDir = str_replace(["\r", "\n", "\t"], '', $uploadDir);
+    $uploadDir = preg_replace('/[[:space:]]*\/[[:space:]]*/', '/', $uploadDir) ?? $uploadDir;
+    $uploadDir = trim($uploadDir);
     if ($uploadDir === '') {
         return __DIR__ . '/uploads';
     }
