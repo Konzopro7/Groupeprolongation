@@ -163,6 +163,22 @@ function requireAdminAuth(): bool
     return true;
 }
 
+function isDebugMode(array $config): bool
+{
+    $raw = $config['app']['debug'] ?? false;
+    if (is_bool($raw)) {
+        return $raw;
+    }
+    if (is_int($raw) || is_float($raw)) {
+        return (int)$raw === 1;
+    }
+    if (is_string($raw)) {
+        $value = strtolower(trim($raw));
+        return in_array($value, ['1', 'true', 'yes', 'on'], true);
+    }
+    return false;
+}
+
 function handleAuthMeRoute(): void
 {
     jsonResponse([
@@ -1064,7 +1080,20 @@ try {
         errorResponse('Contrainte SQL non respectee (categorie invalide ou donnee dupliquee).', 422);
         return;
     }
+    if (isDebugMode($config)) {
+        errorResponse('Erreur base de donnees.', 500, [
+            'sql_state' => (string)$sqlState,
+            'message' => $exception->getMessage(),
+        ]);
+        return;
+    }
     errorResponse('Erreur base de donnees.', 500);
 } catch (Throwable $exception) {
+    if (isDebugMode($config)) {
+        errorResponse('Erreur interne du serveur.', 500, [
+            'message' => $exception->getMessage(),
+        ]);
+        return;
+    }
     errorResponse('Erreur interne du serveur.', 500);
 }

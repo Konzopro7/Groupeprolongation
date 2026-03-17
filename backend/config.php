@@ -15,6 +15,7 @@ return [
         'contact_email' => getenv('CONTACT_EMAIL') ?: 'contact@groupeprolongation.com',
         'allowed_origin' => getenv('ALLOWED_ORIGIN') ?: '*',
         'timezone' => 'America/Toronto',
+        'debug' => getenv('APP_DEBUG') ?: false,
         'uploads_dir' => getenv('UPLOADS_DIR') ?: '',
         'uploads_url_base' => getenv('UPLOADS_URL_BASE') ?: '/api/uploads',
         'max_upload_size' => (int)(getenv('MAX_UPLOAD_SIZE') ?: 25 * 1024 * 1024),
