@@ -2,6 +2,7 @@ import { ChangeEvent, useEffect, useState } from "react";
 import { SubmitHandler, useForm } from "react-hook-form";
 import { Link, useParams } from "react-router-dom";
 import {
+  ApiError,
   createListing,
   fetchListingById,
   fetchAdminSession,
@@ -154,6 +155,7 @@ export default function PublishPage() {
   const [manualMediaUrl, setManualMediaUrl] = useState("");
   const [mediaUrls, setMediaUrls] = useState<string[]>([]);
   const [mediaLoadErrors, setMediaLoadErrors] = useState<Record<string, boolean>>({});
+  const [uploadFeedback, setUploadFeedback] = useState<string | null>(null);
 
   const {
     register,
@@ -381,6 +383,7 @@ export default function PublishPage() {
   async function handleMediaUpload(event: ChangeEvent<HTMLInputElement>) {
     const selectedFiles = Array.from(event.target.files || []);
     if (selectedFiles.length === 0) return;
+    setUploadFeedback(null);
 
     const supportedFiles = selectedFiles.filter((file) => isAllowedLocalUploadFile(file));
     const rejectedFiles = selectedFiles.filter((file) => !isAllowedLocalUploadFile(file));
@@ -393,7 +396,9 @@ export default function PublishPage() {
     }
 
     if (supportedFiles.length === 0) {
-      setServerError(warnings.join(" "));
+      const message = warnings.join(" ");
+      setServerError(message);
+      setUploadFeedback(message);
       event.target.value = "";
       return;
     }
@@ -418,10 +423,14 @@ export default function PublishPage() {
       setMediaUrls((current) =>
         mergeUniqueUrls(current, uploadedUrls).slice(0, MAX_MEDIA_ITEMS),
       );
+      setUploadFeedback(`${uploadedUrls.length} media charge(s) avec succes.`);
     } catch (apiError) {
-      const message =
-        apiError instanceof Error ? apiError.message : "L'upload des medias a echoue.";
+      let message = apiError instanceof Error ? apiError.message : "L'upload des medias a echoue.";
+      if (apiError instanceof ApiError) {
+        message = `${apiError.message} (HTTP ${apiError.status})`;
+      }
       setServerError(message);
+      setUploadFeedback(message);
     } finally {
       setIsUploadingMedia(false);
       event.target.value = "";
@@ -829,6 +838,15 @@ export default function PublishPage() {
                 Maximum {MAX_MEDIA_ITEMS} medias par annonce (photos et videos).
               </p>
               {isUploadingMedia && <p className="mt-1 text-xs text-slate-600">Upload en cours...</p>}
+              {uploadFeedback && (
+                <p
+                  className={`mt-1 text-xs ${
+                    uploadFeedback.includes("succes") ? "text-emerald-700" : "text-rose-700"
+                  }`}
+                >
+                  {uploadFeedback}
+                </p>
+              )}
             </div>
 
             {mediaUrls.length > 0 && (

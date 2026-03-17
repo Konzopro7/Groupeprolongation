@@ -370,6 +370,43 @@ function ensureUploadDirExistsAndWritable(string $path): bool
     return is_writable($path);
 }
 
+function getUploadDiagnostics(array $config): array
+{
+    $candidateDirs = [];
+    foreach (getCandidateUploadDirs($config) as $candidate) {
+        $candidateDirs[] = [
+            'path' => $candidate,
+            'exists' => is_dir($candidate),
+            'writable' => is_writable($candidate),
+            'realpath' => realpath($candidate) ?: null,
+        ];
+    }
+
+    $tmpDir = (string)ini_get('upload_tmp_dir');
+    if ($tmpDir === '') {
+        $tmpDir = sys_get_temp_dir();
+    }
+
+    return [
+        'authenticated' => isAdminAuthenticated(),
+        'php' => [
+            'file_uploads' => (string)ini_get('file_uploads'),
+            'upload_max_filesize' => (string)ini_get('upload_max_filesize'),
+            'post_max_size' => (string)ini_get('post_max_size'),
+            'max_file_uploads' => (string)ini_get('max_file_uploads'),
+            'upload_tmp_dir' => $tmpDir,
+            'upload_tmp_dir_exists' => is_dir($tmpDir),
+            'upload_tmp_dir_writable' => is_writable($tmpDir),
+        ],
+        'app' => [
+            'uploads_url_base' => (string)($config['app']['uploads_url_base'] ?? '/api/uploads'),
+            'max_upload_size' => (int)($config['app']['max_upload_size'] ?? 0),
+            'max_upload_files' => (int)($config['app']['max_upload_files'] ?? 0),
+        ],
+        'candidate_upload_dirs' => $candidateDirs,
+    ];
+}
+
 function getCandidateUploadDirs(array $config): array
 {
     $dirs = [getResolvedUploadDir($config), getDefaultUploadDir()];
@@ -737,6 +774,14 @@ try {
             return;
         }
         handleUploadRoute($config);
+        return;
+    }
+
+    if ($path === '/uploads/diagnostics' && $method === 'GET') {
+        if (!requireAdminAuth()) {
+            return;
+        }
+        jsonResponse(['data' => getUploadDiagnostics($config)]);
         return;
     }
 
