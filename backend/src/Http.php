@@ -33,10 +33,16 @@ function normalizeRequestPath(): string
 {
     $uriPath = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/';
     $uriPath = '/' . ltrim($uriPath, '/');
-    if ($uriPath === '/api') {
+
+    // Supporte /api/* et aussi les installations dans un sous-dossier (ex: /sinc_admin/api/*).
+    $segments = explode('/', trim($uriPath, '/'));
+    $apiIndex = array_search('api', $segments, true);
+
+    if ($apiIndex !== false) {
+        $tail = array_slice($segments, $apiIndex + 1);
+        $uriPath = '/' . implode('/', $tail);
+    } elseif ($uriPath === '/api') {
         $uriPath = '/';
-    } elseif (strpos($uriPath, '/api/') === 0) {
-        $uriPath = substr($uriPath, 4);
     }
 
     return rtrim($uriPath, '/') ?: '/';

@@ -1,5 +1,8 @@
 RewriteEngine On
 
+# Laisse les fichiers/dossiers statiques uniquement pour GET/HEAD.
+# Important: POST /api/uploads doit passer dans index.php meme si /uploads est un dossier.
+RewriteCond %{REQUEST_METHOD} ^(GET|HEAD)$
 RewriteCond %{REQUEST_FILENAME} -f [OR]
 RewriteCond %{REQUEST_FILENAME} -d
 RewriteRule ^ - [L]

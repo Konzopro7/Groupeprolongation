@@ -4,8 +4,8 @@ const SHOW_TECHNICAL =
   import.meta.env.DEV && import.meta.env.VITE_SHOW_API_ERRORS === "true";
 
 /**
- * Messages génériques pour les visiteurs (pas de détails serveur / SQL / HTTP).
- * Pour voir le message réel en local : dans `.env.local` mettre VITE_SHOW_API_ERRORS=true
+ * Messages generiques pour les visiteurs (pas de details serveur / SQL / HTTP).
+ * Pour voir le message reel en local: dans `.env.local`, mettre VITE_SHOW_API_ERRORS=true.
  */
 export const PUBLIC_MSG_LISTINGS =
   "Impossible d'afficher les annonces pour le moment. Merci de reessayer plus tard.";
@@ -20,7 +20,7 @@ function isApiError(error: unknown): error is ApiError {
   return error instanceof ApiError;
 }
 
-/** Erreur chargement listes / accueil / liste filtrée */
+/** Erreur chargement listes / accueil / liste filtree. */
 export function publicListingsError(error: unknown): string {
   if (SHOW_TECHNICAL && error instanceof Error) {
     return error.message;
@@ -28,7 +28,7 @@ export function publicListingsError(error: unknown): string {
   return PUBLIC_MSG_LISTINGS;
 }
 
-/** Erreur page détail : garde « Annonce introuvable » pour 404 (pas technique) */
+/** Erreur page detail: garde "Annonce introuvable." pour 404 (pas technique). */
 export function publicListingDetailError(error: unknown): string {
   if (SHOW_TECHNICAL && error instanceof Error) {
     return error.message;
@@ -39,7 +39,7 @@ export function publicListingDetailError(error: unknown): string {
   return PUBLIC_MSG_LISTING_DETAIL;
 }
 
-/** Erreur formulaire contact */
+/** Erreur formulaire contact. */
 export function publicContactError(error: unknown): string {
   if (SHOW_TECHNICAL && error instanceof Error) {
     return error.message;

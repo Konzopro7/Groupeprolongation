@@ -6,7 +6,7 @@ import {
   NewListingPayload,
 } from "../types";
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "/api";
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 const USE_MOCK = import.meta.env.VITE_ENABLE_MOCK === "true";
 
 const MOCK_CATEGORIES_KEY = "gp_mock_categories_v2";
@@ -14,6 +14,24 @@ const MOCK_LISTINGS_KEY = "gp_mock_listings_v2";
 const MOCK_CONTACTS_KEY = "gp_mock_contacts_v2";
 const MOCK_ADMIN_SESSION_KEY = "gp_mock_admin_session_v2";
 const MAX_MEDIA_ITEMS = 20;
+
+function normalizeApiBaseUrl(base: string): string {
+  const trimmed = String(base || "").trim();
+  if (!trimmed) {
+    return "/api";
+  }
+  return trimmed.replace(/\/+$/, "");
+}
+
+function getDefaultApiBaseUrl(): string {
+  const baseUrl = String(import.meta.env.BASE_URL || "/").trim();
+  if (baseUrl !== "/" && baseUrl !== "") {
+    return `${baseUrl.replace(/\/+$/, "")}/api`;
+  }
+  return "/api";
+}
+
+const RESOLVED_API_BASE_URL = normalizeApiBaseUrl(API_BASE_URL || getDefaultApiBaseUrl());
 
 function toCanonicalMediaReference(value: string): string {
   const trimmed = String(value || "").trim();
@@ -30,7 +48,7 @@ function toCanonicalMediaReference(value: string): string {
     if (/^https?:/i.test(trimmed)) {
       try {
         const parsed = new URL(trimmed);
-        if (parsed.pathname.startsWith("/api/uploads/")) {
+        if (/\/api\/uploads\//.test(parsed.pathname)) {
           return `${parsed.pathname}${parsed.search}${parsed.hash}`;
         }
         return parsed.toString();
@@ -355,7 +373,7 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   }
   headers.set("Accept", "application/json");
 
-  const response = await fetch(`${API_BASE_URL}${path}`, {
+  const response = await fetch(`${RESOLVED_API_BASE_URL}${path}`, {
     ...init,
     credentials: "include",
     headers,

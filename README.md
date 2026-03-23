@@ -19,7 +19,7 @@ npm install
 npm run dev
 ```
 
-Le frontend appelle l'API via `VITE_API_BASE_URL` (par defaut `/api`).
+Le frontend appelle l'API via `VITE_API_BASE_URL` (par defaut: detection auto via `BASE_URL` puis `/api`).
 Un proxy dev est configure vers `http://localhost:8000`.
 
 ### Apercu rapide sans backend (mode mock)
@@ -188,6 +188,8 @@ php -S localhost:8000 backend/router.php
 ### 3) Connexion front <-> API
 
 En production, garder `VITE_API_BASE_URL=/api` (meme domaine).
+Si ton site est servi dans un sous-dossier (ex: `/groupeprolongation.com/`), tu peux mettre:
+`VITE_API_BASE_URL=/groupeprolongation.com/api`
 
 ## Deploiement Auto GitHub Actions (FTP GreenGeeks)
 
@@ -236,6 +238,7 @@ Dans `GitHub > Settings > Secrets and variables > Actions > New repository secre
   - upload fichiers locaux possible via `POST /api/uploads`
   - accepte images + videos (max 20 medias par annonce)
   - taille max par fichier: `MAX_UPLOAD_SIZE` (25 MB par defaut)
+  - la route `POST /api/uploads` passe toujours par l API (regle `.htaccess` corrigee pour Apache)
 - Admin:
   - page `/admin` avec authentification
   - publication/modification/suppression/upload proteges par session admin

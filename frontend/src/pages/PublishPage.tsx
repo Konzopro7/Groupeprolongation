@@ -428,6 +428,12 @@ export default function PublishPage() {
       let message = apiError instanceof Error ? apiError.message : "L'upload des medias a echoue.";
       if (apiError instanceof ApiError) {
         message = `${apiError.message} (HTTP ${apiError.status})`;
+        if (apiError.status === 401) {
+          message += " Connecte-toi d'abord sur /admin.";
+        }
+        if (apiError.status === 404 || apiError.status === 405) {
+          message += " Verifie api/.htaccess (POST /api/uploads).";
+        }
       }
       setServerError(message);
       setUploadFeedback(message);

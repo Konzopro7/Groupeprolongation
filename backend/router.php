@@ -4,11 +4,17 @@ declare(strict_types=1);
 
 $requestPath = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/';
 $normalizedPath = $requestPath;
-if ($normalizedPath === '/api') {
+$segments = explode('/', trim($normalizedPath, '/'));
+$apiIndex = array_search('api', $segments, true);
+
+if ($apiIndex !== false) {
+    $tail = array_slice($segments, $apiIndex + 1);
+    $normalizedPath = '/' . implode('/', $tail);
+} elseif ($normalizedPath === '/api') {
     $normalizedPath = '/';
-} elseif (str_starts_with($normalizedPath, '/api/')) {
-    $normalizedPath = substr($normalizedPath, 4);
 }
+
+$normalizedPath = rtrim($normalizedPath, '/') ?: '/';
 
 $publicRoot = realpath(__DIR__ . '/public') ?: (__DIR__ . '/public');
 $publicFile = realpath($publicRoot . $normalizedPath);

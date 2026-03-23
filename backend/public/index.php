@@ -2,17 +2,53 @@
 
 declare(strict_types=1);
 
-$rootDir = dirname(__DIR__);
-if (!file_exists($rootDir . '/config.php')) {
-    $rootDir = __DIR__;
+$bootstrapRoots = [
+    dirname(__DIR__),
+    __DIR__,
+    dirname(__DIR__) . '/api',
+    __DIR__ . '/api',
+];
+
+$configPath = null;
+$sourceDir = null;
+$checkedRoots = [];
+
+foreach ($bootstrapRoots as $candidateRoot) {
+    $root = rtrim(str_replace('\\', '/', $candidateRoot), '/');
+    if ($root === '' || in_array($root, $checkedRoots, true)) {
+        continue;
+    }
+    $checkedRoots[] = $root;
+
+    $candidateConfig = $root . '/config.php';
+    $candidateSrc = $root . '/src';
+
+    if (is_file($candidateConfig) && is_dir($candidateSrc)) {
+        $configPath = $candidateConfig;
+        $sourceDir = $candidateSrc;
+        break;
+    }
 }
 
-$config = require $rootDir . '/config.php';
+if ($configPath === null || $sourceDir === null) {
+    http_response_code(500);
+    header('Content-Type: application/json; charset=utf-8');
+    echo json_encode([
+        'error' => 'Configuration API introuvable.',
+        'details' => [
+            'checked_roots' => $checkedRoots,
+            'expected_files' => ['config.php', 'src/Database.php', 'src/Http.php', 'src/Validator.php'],
+        ],
+    ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    exit;
+}
+
+$config = require $configPath;
 date_default_timezone_set($config['app']['timezone']);
 
-require $rootDir . '/src/Database.php';
-require $rootDir . '/src/Http.php';
-require $rootDir . '/src/Validator.php';
+require $sourceDir . '/Database.php';
+require $sourceDir . '/Http.php';
+require $sourceDir . '/Validator.php';
 
 $isHttps = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
     || (($_SERVER['SERVER_PORT'] ?? '') === '443');
