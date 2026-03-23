@@ -237,16 +237,25 @@ function mapPdoExceptionToPublicMessage(PDOException $exception): string
     $msg = strtolower($exception->getMessage());
 
     return match ($driverCode) {
+        1044 => 'Acces refuse a la base: verifiez privileges MySQL de DB_USER sur DB_NAME.',
         1045 => 'Connexion MySQL refusee : verifiez DB_USER et DB_PASS dans api/config.php (cPanel > MySQL).',
         1049 => 'Base inexistante : creez la base et importez backend/sql/schema.sql, puis verifiez DB_NAME.',
         2002, 2003 => 'Serveur MySQL injoignable : verifiez DB_HOST (souvent "localhost" sur cPanel).',
+        1142 => 'Permission SQL insuffisante: accordez SELECT/INSERT/UPDATE/DELETE au user MySQL.',
         1146 => 'Table manquante : importez backend/sql/schema.sql dans phpMyAdmin.',
+        1054 => 'Colonne manquante: executez backend/sql/v2_2_migration.sql puis rafraichissez.',
         default => (function () use ($msg): string {
             if (str_contains($msg, 'access denied')) {
                 return 'Connexion MySQL refusee : identifiants incorrects dans api/config.php.';
             }
             if (str_contains($msg, 'unknown database')) {
                 return 'Base de donnees inexistante : verifiez DB_NAME et importez schema.sql.';
+            }
+            if (str_contains($msg, 'unknown column')) {
+                return 'Schema SQL incomplet: executez backend/sql/v2_2_migration.sql.';
+            }
+            if (str_contains($msg, 'command denied')) {
+                return 'Privileges SQL insuffisants pour ce user MySQL.';
             }
             if (str_contains($msg, "doesn't exist") && str_contains($msg, 'table')) {
                 return 'Table manquante : importez backend/sql/schema.sql.';
@@ -868,6 +877,50 @@ try {
         }
         handleUploadRoute($config);
         return;
+    }
+
+    if ($path === '/health' && $method === 'GET') {
+        jsonResponse([
+            'data' => [
+                'status' => 'ok',
+                'api' => 'Groupe Prolongation',
+                'time' => date('c'),
+            ],
+        ]);
+        return;
+    }
+
+    if ($path === '/health/db' && $method === 'GET') {
+        try {
+            $pdo = Database::getConnection($config);
+            $activeDb = (string)$pdo->query('SELECT DATABASE()')->fetchColumn();
+            $categoriesCount = (int)$pdo->query('SELECT COUNT(*) FROM categories')->fetchColumn();
+            $listingsCount = (int)$pdo->query('SELECT COUNT(*) FROM listings')->fetchColumn();
+
+            jsonResponse([
+                'data' => [
+                    'db_ok' => true,
+                    'active_db' => $activeDb,
+                    'categories' => $categoriesCount,
+                    'listings' => $listingsCount,
+                    'time' => date('c'),
+                ],
+            ]);
+            return;
+        } catch (PDOException $exception) {
+            $publicMessage = mapPdoExceptionToPublicMessage($exception);
+            if (isDebugMode($config)) {
+                $errorInfo = $exception->errorInfo;
+                errorResponse($publicMessage, 500, [
+                    'sql_state' => (string)$exception->getCode(),
+                    'driver_code' => is_array($errorInfo) && isset($errorInfo[1]) ? $errorInfo[1] : null,
+                    'message' => $exception->getMessage(),
+                ]);
+                return;
+            }
+            errorResponse($publicMessage, 500);
+            return;
+        }
     }
 
     if ($path === '/uploads/diagnostics' && $method === 'GET') {
