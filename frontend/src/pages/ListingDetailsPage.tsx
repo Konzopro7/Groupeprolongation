@@ -9,6 +9,7 @@ import {
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { fetchListingById } from "../api/client";
+import { publicListingDetailError } from "../utils/publicErrorMessage";
 import { useSeo } from "../hooks/useSeo";
 import { Listing } from "../types";
 
@@ -42,8 +43,8 @@ export default function ListingDetailsPage() {
         setActiveMediaIndex(0);
         setError(null);
       })
-      .catch((apiError: Error) => {
-        setError(apiError.message);
+      .catch((apiError: unknown) => {
+        setError(publicListingDetailError(apiError));
       })
       .finally(() => setIsLoading(false));
   }, [id]);
@@ -63,7 +64,7 @@ export default function ListingDetailsPage() {
   if (error || !listing) {
     return (
       <div className="rounded-xl border border-rose-200 bg-rose-50 p-6 text-sm text-rose-700 page-enter">
-        {error || "Annonce introuvable."}
+        {error ?? "Annonce introuvable."}
       </div>
     );
   }

@@ -191,6 +191,35 @@ function isDebugMode(array $config): bool
     return false;
 }
 
+/**
+ * Message public sans secrets (pour le front). Aide au diagnostic sur cPanel / hebergeur mutualise.
+ */
+function mapPdoExceptionToPublicMessage(PDOException $exception): string
+{
+    $errorInfo = $exception->errorInfo;
+    $driverCode = is_array($errorInfo) && isset($errorInfo[1]) ? (int) $errorInfo[1] : 0;
+    $msg = strtolower($exception->getMessage());
+
+    return match ($driverCode) {
+        1045 => 'Connexion MySQL refusee : verifiez DB_USER et DB_PASS dans api/config.php (cPanel > MySQL).',
+        1049 => 'Base inexistante : creez la base et importez backend/sql/schema.sql, puis verifiez DB_NAME.',
+        2002, 2003 => 'Serveur MySQL injoignable : verifiez DB_HOST (souvent "localhost" sur cPanel).',
+        1146 => 'Table manquante : importez backend/sql/schema.sql dans phpMyAdmin.',
+        default => (function () use ($msg): string {
+            if (str_contains($msg, 'access denied')) {
+                return 'Connexion MySQL refusee : identifiants incorrects dans api/config.php.';
+            }
+            if (str_contains($msg, 'unknown database')) {
+                return 'Base de donnees inexistante : verifiez DB_NAME et importez schema.sql.';
+            }
+            if (str_contains($msg, "doesn't exist") && str_contains($msg, 'table')) {
+                return 'Table manquante : importez backend/sql/schema.sql.';
+            }
+            return 'Erreur base de donnees. Verifiez api/config.php et l import SQL.';
+        })(),
+    };
+}
+
 function handleAuthMeRoute(): void
 {
     jsonResponse([
@@ -1092,14 +1121,17 @@ try {
         errorResponse('Contrainte SQL non respectee (categorie invalide ou donnee dupliquee).', 422);
         return;
     }
+    $publicMessage = mapPdoExceptionToPublicMessage($exception);
     if (isDebugMode($config)) {
-        errorResponse('Erreur base de donnees.', 500, [
-            'sql_state' => (string)$sqlState,
+        $errorInfo = $exception->errorInfo;
+        errorResponse($publicMessage, 500, [
+            'sql_state' => (string) $sqlState,
+            'driver_code' => is_array($errorInfo) && isset($errorInfo[1]) ? $errorInfo[1] : null,
             'message' => $exception->getMessage(),
         ]);
         return;
     }
-    errorResponse('Erreur base de donnees.', 500);
+    errorResponse($publicMessage, 500);
 } catch (Throwable $exception) {
     if (isDebugMode($config)) {
         errorResponse('Erreur interne du serveur.', 500, [

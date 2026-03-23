@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { SubmitHandler, useForm } from "react-hook-form";
 import { useSearchParams } from "react-router-dom";
 import { sendContactMessage } from "../api/client";
+import { publicContactError } from "../utils/publicErrorMessage";
 import { useSeo } from "../hooks/useSeo";
 
 interface ContactFormValues {
@@ -48,9 +49,7 @@ export default function ContactPage() {
       setValue("email", "");
       setValue("message", "");
     } catch (apiError) {
-      const message =
-        apiError instanceof Error ? apiError.message : "Impossible d'envoyer votre message.";
-      setServerError(message);
+      setServerError(publicContactError(apiError));
     }
   };
 

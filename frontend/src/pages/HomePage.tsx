@@ -2,6 +2,7 @@ import { ArrowRightIcon, MagnifyingGlassIcon } from "@heroicons/react/24/outline
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { fetchListings } from "../api/client";
+import { publicListingsError } from "../utils/publicErrorMessage";
 import ListingCard from "../components/ListingCard";
 import { useSeo } from "../hooks/useSeo";
 import { Listing } from "../types";
@@ -76,9 +77,9 @@ export default function HomePage() {
           setError(null);
         }
       })
-      .catch((apiError: Error) => {
+      .catch((apiError: unknown) => {
         if (isMounted) {
-          setError(apiError.message);
+          setError(publicListingsError(apiError));
         }
       })
       .finally(() => {
@@ -202,7 +203,7 @@ export default function HomePage() {
 
         {error && (
           <div className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">
-            Impossible de charger les annonces: {error}
+            {error}
           </div>
         )}
 

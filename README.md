@@ -100,6 +100,17 @@ Configurer `backend/config.php` avec les identifiants MySQL:
 - `user`
 - `pass`
 
+Sur l hebergeur, le fichier deploye est en general **`public_html/.../api/config.php`** (copie de `backend/config.php`). Les valeurs par defaut (`root`, mot de passe vide, base `groupeprolongation`) ne fonctionnent **pas** sur un mutualise : il faut les remplacer par celles de **cPanel > MySQL Databases** (utilisateur MySQL dedie + mot de passe + nom de la base). **`DB_HOST` est souvent `localhost`.**
+
+### Depannage: message « Erreur base de donnees » sur l accueil
+
+Ce message apparait quand le front appelle **`GET /api/listings`** et que PHP ne peut pas utiliser MySQL (mauvais identifiants, base ou tables absentes).
+
+1. Ouvre **`https://ton-domaine.com/api/categories`** dans le navigateur.
+   - Si erreur 500 / JSON avec message explicite : corrige **`api/config.php`** (`DB_NAME`, `DB_USER`, `DB_PASS`, `DB_HOST`).
+2. Dans **phpMyAdmin**, selectionne ta base et verifie qu il y a les tables (`categories`, `listings`, etc.). Sinon importe **`backend/sql/schema.sql`**.
+3. Optionnel : dans `api/config.php`, mets **`APP_DEBUG=true`** (temporairement) pour voir le detail technique dans la reponse JSON (puis remets **`false`** en production).
+
 ### Config Auth Admin
 
 Configurer dans `backend/config.php`:

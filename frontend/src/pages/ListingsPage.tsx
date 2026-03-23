@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { fetchCategories, fetchListings } from "../api/client";
+import { publicListingsError } from "../utils/publicErrorMessage";
 import FilterBar, { ListingFilterFormValues } from "../components/FilterBar";
 import ListingCard from "../components/ListingCard";
 import { useSeo } from "../hooks/useSeo";
@@ -37,8 +38,8 @@ export default function ListingsPage() {
         setListings(items);
         setError(null);
       })
-      .catch((apiError: Error) => {
-        setError(apiError.message);
+      .catch((apiError: unknown) => {
+        setError(publicListingsError(apiError));
       })
       .finally(() => setIsLoading(false));
   }, [filters]);
@@ -72,7 +73,7 @@ export default function ListingsPage() {
 
       {error && (
         <div className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">
-          Une erreur est survenue: {error}
+          {error}
         </div>
       )}
 
