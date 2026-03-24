@@ -48,8 +48,9 @@ function toCanonicalMediaReference(value: string): string {
     if (/^https?:/i.test(trimmed)) {
       try {
         const parsed = new URL(trimmed);
-        if (/\/api\/uploads\//.test(parsed.pathname)) {
-          return `${parsed.pathname}${parsed.search}${parsed.hash}`;
+        if (/\/api\/(?:uploads|media)\//.test(parsed.pathname)) {
+          const normalizedPath = parsed.pathname.replace("/api/uploads/", "/api/media/");
+          return `${normalizedPath}${parsed.search}${parsed.hash}`;
         }
         return parsed.toString();
       } catch {
@@ -70,11 +71,18 @@ function toCanonicalMediaReference(value: string): string {
   }
 
   if (trimmed.startsWith("/")) {
+    if (trimmed.startsWith("/api/uploads/")) {
+      return trimmed.replace("/api/uploads/", "/api/media/");
+    }
     return trimmed;
   }
 
   if (trimmed.startsWith("api/")) {
-    return `/${trimmed}`;
+    const withSlash = `/${trimmed}`;
+    if (withSlash.startsWith("/api/uploads/")) {
+      return withSlash.replace("/api/uploads/", "/api/media/");
+    }
+    return withSlash;
   }
 
   return trimmed;
@@ -427,14 +435,30 @@ function extractUploadedUrls(response: ApiResponse<{ urls?: string[]; url?: stri
   return [];
 }
 
-async function uploadViaJsonFallback(files: File[]): Promise<string[]> {
+function isRetriableUploadError(error: unknown): error is ApiError {
+  return error instanceof ApiError && (error.status === 403 || error.status === 404 || error.status === 405);
+}
+
+function createMediaFormData(files: File[]): FormData {
+  const formData = new FormData();
+  files.forEach((file) => formData.append("media[]", file));
+  return formData;
+}
+
+function createSingleMediaFormData(file: File): FormData {
+  const formData = new FormData();
+  formData.append("file", file);
+  return formData;
+}
+
+async function uploadViaJsonFallback(files: File[], endpoint: string): Promise<string[]> {
   const dataUrls = await filesToDataUrls(files);
   const payloadFiles = files.map((file, index) => ({
     name: file.name,
     data_url: dataUrls[index] || "",
   }));
 
-  const response = await request<ApiResponse<{ urls?: string[]; url?: string }>>("/upload-media-json", {
+  const response = await request<ApiResponse<{ urls?: string[]; url?: string }>>(endpoint, {
     method: "POST",
     body: JSON.stringify({ files: payloadFiles }),
   });
@@ -681,38 +705,101 @@ export async function uploadListingFiles(files: File[]): Promise<string[]> {
     return filesToDataUrls(files);
   }
 
-  const formData = new FormData();
-  files.forEach((file) => formData.append("media[]", file));
-  let response: ApiResponse<{ urls?: string[]; url?: string }> | null = null;
   let lastError: unknown = null;
-  try {
-    response = await request<ApiResponse<{ urls?: string[]; url?: string }>>("/upload-media", {
-      method: "POST",
-      body: formData,
-    });
-  } catch (error) {
-    const shouldRetryLegacyRoute =
-      error instanceof ApiError && (error.status === 404 || error.status === 405 || error.status === 403);
-    if (!shouldRetryLegacyRoute) {
-      throw error;
-    }
-    lastError = error;
+  const multipartEndpoints = [
+    "/files",
+    "/media-store",
+    "/upload-media",
+    "/uploads",
+    "/index.php?route=files",
+    "/index.php?route=media-store",
+    "/index.php?route=upload-media",
+    "/index.php?route=uploads",
+    "/index.php?r=files",
+    "/index.php?r=media-store",
+    "/index.php?r=upload-media",
+    "/index.php?r=uploads",
+    "/index.php?__route=files",
+    "/index.php?__route=media-store",
+    "/index.php?__route=upload-media",
+    "/index.php?__route=uploads",
+  ];
+
+  for (const endpoint of multipartEndpoints) {
     try {
-      response = await request<ApiResponse<{ urls?: string[]; url?: string }>>("/uploads", {
+      const response = await request<ApiResponse<{ urls?: string[]; url?: string }>>(endpoint, {
         method: "POST",
-        body: formData,
+        body: createMediaFormData(files),
       });
-    } catch (legacyError) {
-      lastError = legacyError;
+      return extractUploadedUrls(response);
+    } catch (error) {
+      if (!isRetriableUploadError(error)) {
+        throw error;
+      }
+      lastError = error;
     }
   }
 
-  if (response) {
-    return extractUploadedUrls(response);
+  // Fallback plus tolerant: upload 1 fichier a la fois avec un champ simple `file`.
+  const singleFileUrls: string[] = [];
+  let singleFileModeWorked = false;
+  for (const file of files) {
+    let uploadedForThisFile = false;
+    for (const endpoint of multipartEndpoints) {
+      try {
+        const response = await request<ApiResponse<{ urls?: string[]; url?: string }>>(endpoint, {
+          method: "POST",
+          body: createSingleMediaFormData(file),
+        });
+        const urls = extractUploadedUrls(response);
+        if (urls.length > 0) {
+          singleFileUrls.push(...urls);
+          singleFileModeWorked = true;
+          uploadedForThisFile = true;
+          break;
+        }
+      } catch (error) {
+        if (!isRetriableUploadError(error)) {
+          throw error;
+        }
+        lastError = error;
+      }
+    }
+
+    if (!uploadedForThisFile) {
+      singleFileModeWorked = false;
+      break;
+    }
   }
 
-  if (lastError instanceof ApiError && lastError.status === 403) {
-    return uploadViaJsonFallback(files);
+  if (singleFileModeWorked && singleFileUrls.length > 0) {
+    return normalizeMediaArray(singleFileUrls);
+  }
+
+  const jsonEndpoints = [
+    "/files-json",
+    "/media-store-json",
+    "/upload-media-json",
+    "/index.php?route=files-json",
+    "/index.php?route=media-store-json",
+    "/index.php?route=upload-media-json",
+    "/index.php?r=files-json",
+    "/index.php?r=media-store-json",
+    "/index.php?r=upload-media-json",
+    "/index.php?__route=files-json",
+    "/index.php?__route=media-store-json",
+    "/index.php?__route=upload-media-json",
+  ];
+
+  for (const endpoint of jsonEndpoints) {
+    try {
+      return await uploadViaJsonFallback(files, endpoint);
+    } catch (error) {
+      if (!isRetriableUploadError(error)) {
+        throw error;
+      }
+      lastError = error;
+    }
   }
 
   throw lastError instanceof Error ? lastError : new ApiError("Upload media impossible.", 500);

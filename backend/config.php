@@ -17,7 +17,7 @@ return [
         'timezone' => 'America/Toronto',
         'debug' => getenv('APP_DEBUG') ?: false,
         'uploads_dir' => getenv('UPLOADS_DIR') ?: '',
-        'uploads_url_base' => getenv('UPLOADS_URL_BASE') ?: '/api/uploads',
+        'uploads_url_base' => getenv('UPLOADS_URL_BASE') ?: '/api/media',
         'max_upload_size' => (int)(getenv('MAX_UPLOAD_SIZE') ?: 25 * 1024 * 1024),
         'max_upload_files' => (int)(getenv('MAX_UPLOAD_FILES') ?: 20),
         'admin_username' => getenv('ADMIN_USERNAME') ?: 'admin',

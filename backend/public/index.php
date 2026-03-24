@@ -108,11 +108,19 @@ function mapListingRow(array $row): array
         if (is_array($decoded)) {
             foreach ($decoded as $entry) {
                 if (is_string($entry) && trim($entry) !== '') {
-                    $images[] = $entry;
+                    $normalizedEntry = trim($entry);
+                    if (str_starts_with($normalizedEntry, '/api/uploads/')) {
+                        $normalizedEntry = '/api/media/' . basename($normalizedEntry);
+                    }
+                    $images[] = $normalizedEntry;
                 }
             }
         } elseif (filter_var($rawImages, FILTER_VALIDATE_URL) || str_starts_with($rawImages, '/')) {
-            $images[] = $rawImages;
+            $normalizedEntry = $rawImages;
+            if (str_starts_with($normalizedEntry, '/api/uploads/')) {
+                $normalizedEntry = '/api/media/' . basename($normalizedEntry);
+            }
+            $images[] = $normalizedEntry;
         }
     }
 
@@ -368,6 +376,14 @@ function collectIncomingUploadFiles(): array
         $files = array_merge($files, normalizeIncomingUploadField($_FILES['media']));
     }
 
+    if (isset($_FILES['files']) && is_array($_FILES['files'])) {
+        $files = array_merge($files, normalizeIncomingUploadField($_FILES['files']));
+    }
+
+    if (isset($_FILES['file']) && is_array($_FILES['file'])) {
+        $files = array_merge($files, normalizeIncomingUploadField($_FILES['file']));
+    }
+
     if (isset($_FILES['image']) && is_array($_FILES['image'])) {
         $files = array_merge($files, normalizeIncomingUploadField($_FILES['image']));
     }
@@ -507,7 +523,7 @@ function getUploadDiagnostics(array $config): array
             'upload_tmp_dir_writable' => is_writable($tmpDir),
         ],
         'app' => [
-            'uploads_url_base' => (string)($config['app']['uploads_url_base'] ?? '/api/uploads'),
+            'uploads_url_base' => getUploadsUrlBase($config),
             'max_upload_size' => (int)($config['app']['max_upload_size'] ?? 0),
             'max_upload_files' => (int)($config['app']['max_upload_files'] ?? 0),
         ],
@@ -530,6 +546,16 @@ function getCandidateUploadDirs(array $config): array
     }
 
     return $unique;
+}
+
+function getUploadsUrlBase(array $config): string
+{
+    $base = trim((string)($config['app']['uploads_url_base'] ?? ''));
+    if ($base === '' || $base === '/api/uploads') {
+        return '/api/media';
+    }
+
+    return rtrim('/' . ltrim($base, '/'), '/');
 }
 
 function resolveUploadedMediaFilePath(array $config, string $fileName): ?string
@@ -831,7 +857,7 @@ function handleUploadJsonRoute(array $config): void
 
     $allowedMimeMap = getAllowedMediaMimeMap();
     $allowedExtensions = array_values(array_unique(array_values($allowedMimeMap)));
-    $uploadsUrlBase = rtrim((string)($config['app']['uploads_url_base'] ?? '/api/uploads'), '/');
+    $uploadsUrlBase = getUploadsUrlBase($config);
     $savedPaths = [];
     $savedUrls = [];
 
@@ -947,7 +973,7 @@ function handleUploadRoute(array $config): void
 
     $allowedMimeMap = getAllowedMediaMimeMap();
     $allowedExtensions = array_values(array_unique(array_values($allowedMimeMap)));
-    $uploadsUrlBase = rtrim((string)($config['app']['uploads_url_base'] ?? '/api/uploads'), '/');
+    $uploadsUrlBase = getUploadsUrlBase($config);
     $savedPaths = [];
     $savedUrls = [];
 
@@ -1037,6 +1063,21 @@ function handleUploadRoute(array $config): void
 try {
     $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
     $path = normalizeRequestPath();
+    if ($path === '/index.php') {
+        $routeFromQuery = null;
+        if (isset($_GET['route']) && is_string($_GET['route'])) {
+            $routeFromQuery = (string)$_GET['route'];
+        } elseif (isset($_GET['r']) && is_string($_GET['r'])) {
+            $routeFromQuery = (string)$_GET['r'];
+        } elseif (isset($_GET['__route']) && is_string($_GET['__route'])) {
+            $routeFromQuery = (string)$_GET['__route'];
+        }
+
+        if ($routeFromQuery !== null) {
+            $path = '/' . trim($routeFromQuery, '/');
+        }
+        $path = rtrim($path, '/') ?: '/';
+    }
 
     if ($path === '/' && $method === 'GET') {
         jsonResponse([
@@ -1063,7 +1104,7 @@ try {
         return;
     }
 
-    if (($path === '/uploads' || $path === '/upload-media') && $method === 'POST') {
+    if (in_array($path, ['/uploads', '/upload-media', '/files', '/media-store'], true) && $method === 'POST') {
         if (!requireAdminAuth()) {
             return;
         }
@@ -1071,7 +1112,7 @@ try {
         return;
     }
 
-    if ($path === '/upload-media-json' && $method === 'POST') {
+    if (in_array($path, ['/upload-media-json', '/files-json', '/media-store-json'], true) && $method === 'POST') {
         if (!requireAdminAuth()) {
             return;
         }
@@ -1132,7 +1173,7 @@ try {
     }
 
     if (
-        preg_match('#^/uploads/([a-zA-Z0-9._-]+)$#', $path, $matches) === 1
+        preg_match('#^/(?:uploads|media)/([a-zA-Z0-9._-]+)$#', $path, $matches) === 1
         && in_array($method, ['GET', 'HEAD'], true)
     ) {
         streamUploadedMedia($config, (string)$matches[1], $method === 'HEAD');
