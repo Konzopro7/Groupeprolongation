@@ -383,11 +383,17 @@ function getAllowedMediaMimeMap(): array
     return [
         'image/jpeg' => 'jpg',
         'image/pjpeg' => 'jpg',
+        'image/jfif' => 'jpg',
         'image/png' => 'png',
         'image/webp' => 'webp',
         'image/gif' => 'gif',
         'image/bmp' => 'bmp',
         'image/avif' => 'avif',
+        'image/heic' => 'heic',
+        'image/heif' => 'heif',
+        'image/tiff' => 'tif',
+        'image/x-icon' => 'ico',
+        'image/vnd.microsoft.icon' => 'ico',
         'video/mp4' => 'mp4',
         'video/mpeg' => 'mpeg',
         'video/quicktime' => 'mov',
@@ -555,11 +561,17 @@ function detectMimeTypeByExtension(string $filePath): string
     $mimeByExt = [
         'jpg' => 'image/jpeg',
         'jpeg' => 'image/jpeg',
+        'jfif' => 'image/jpeg',
         'png' => 'image/png',
         'webp' => 'image/webp',
         'gif' => 'image/gif',
         'bmp' => 'image/bmp',
         'avif' => 'image/avif',
+        'heic' => 'image/heic',
+        'heif' => 'image/heif',
+        'tif' => 'image/tiff',
+        'tiff' => 'image/tiff',
+        'ico' => 'image/x-icon',
         'mp4' => 'video/mp4',
         'mpeg' => 'video/mpeg',
         'mpg' => 'video/mpeg',
@@ -683,11 +695,17 @@ function detectUploadedMimeType(string $tmpName, string $originalName): string
     $fallbackByExt = [
         'jpg' => 'image/jpeg',
         'jpeg' => 'image/jpeg',
+        'jfif' => 'image/jpeg',
         'png' => 'image/png',
         'webp' => 'image/webp',
         'gif' => 'image/gif',
         'bmp' => 'image/bmp',
         'avif' => 'image/avif',
+        'heic' => 'image/heic',
+        'heif' => 'image/heif',
+        'tif' => 'image/tiff',
+        'tiff' => 'image/tiff',
+        'ico' => 'image/x-icon',
         'mp4' => 'video/mp4',
         'webm' => 'video/webm',
         'ogv' => 'video/ogg',
@@ -789,6 +807,34 @@ function handleUploadRoute(array $config): void
         $mimeType = detectUploadedMimeType($tmpName, $originalName);
         $extension = $allowedMimeMap[$mimeType] ?? '';
 
+        // Accepte tout mime image/* avec extension connue (ou jpg par defaut).
+        if ($extension === '' && $mimeType !== '' && str_starts_with($mimeType, 'image/')) {
+            $extFromName = strtolower((string)pathinfo($originalName, PATHINFO_EXTENSION));
+            $extFromName = preg_replace('/[^a-z0-9]/', '', $extFromName) ?: '';
+
+            $imageFallbackMap = [
+                'jpeg' => 'jpg',
+                'jpg' => 'jpg',
+                'jfif' => 'jpg',
+                'png' => 'png',
+                'webp' => 'webp',
+                'gif' => 'gif',
+                'bmp' => 'bmp',
+                'avif' => 'avif',
+                'heic' => 'heic',
+                'heif' => 'heif',
+                'tif' => 'tif',
+                'tiff' => 'tif',
+                'ico' => 'ico',
+            ];
+
+            if ($extFromName !== '' && isset($imageFallbackMap[$extFromName])) {
+                $extension = $imageFallbackMap[$extFromName];
+            } else {
+                $extension = 'jpg';
+            }
+        }
+
         if ($extension === '') {
             $fallbackExtension = strtolower((string)pathinfo($originalName, PATHINFO_EXTENSION));
             $fallbackExtension = preg_replace('/[^a-z0-9]/', '', $fallbackExtension) ?: '';
@@ -808,7 +854,7 @@ function handleUploadRoute(array $config): void
                 }
             }
             errorResponse(
-                'Format media non supporte. Formats acceptes: JPG, PNG, WEBP, GIF, AVIF, BMP, MP4, WEBM, OGG, MOV, MPEG.',
+                'Format media non supporte. Formats acceptes: JPG, JPEG, JFIF, PNG, WEBP, GIF, AVIF, BMP, HEIC, HEIF, TIFF, ICO, MP4, WEBM, OGG, MOV, MPEG.',
                 422
             );
             return;
@@ -871,7 +917,7 @@ try {
         return;
     }
 
-    if ($path === '/uploads' && $method === 'POST') {
+    if (($path === '/uploads' || $path === '/upload-media') && $method === 'POST') {
         if (!requireAdminAuth()) {
             return;
         }

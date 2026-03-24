@@ -4,9 +4,14 @@ Options -Indexes
     AddType image/avif .avif
     AddType image/webp .webp
     AddType image/jpeg .jpg .jpeg
+    AddType image/jpeg .jfif
     AddType image/png .png
     AddType image/gif .gif
     AddType image/bmp .bmp
+    AddType image/heic .heic
+    AddType image/heif .heif
+    AddType image/tiff .tif .tiff
+    AddType image/x-icon .ico
     AddType video/mp4 .mp4
     AddType video/webm .webm
     AddType video/ogg .ogg .ogv

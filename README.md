@@ -142,6 +142,7 @@ php -S localhost:8000 backend/router.php
 - `DELETE /api/listings/{id}`
 - `POST /api/contact`
 - `POST /api/uploads` (upload multi-media: images + videos, jusqu a 20 fichiers)
+- `POST /api/upload-media` (route upload robuste anti 403 sur certains mutualises)
 - `GET /api/health` (etat API sans DB)
 - `GET /api/health/db` (test connexion DB + compte categories/listings)
 - `GET /api/auth/me`

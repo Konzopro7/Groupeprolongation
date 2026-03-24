@@ -21,11 +21,17 @@ const MAX_MEDIA_ITEMS = 20;
 const allowedUploadMimes = new Set([
   "image/jpeg",
   "image/pjpeg",
+  "image/jfif",
   "image/png",
   "image/webp",
   "image/gif",
   "image/avif",
   "image/bmp",
+  "image/heic",
+  "image/heif",
+  "image/tiff",
+  "image/x-icon",
+  "image/vnd.microsoft.icon",
   "video/mp4",
   "video/webm",
   "video/ogg",
@@ -35,11 +41,17 @@ const allowedUploadMimes = new Set([
 const allowedUploadExtensions = new Set([
   "jpg",
   "jpeg",
+  "jfif",
   "png",
   "webp",
   "gif",
   "avif",
   "bmp",
+  "heic",
+  "heif",
+  "tif",
+  "tiff",
+  "ico",
   "mp4",
   "webm",
   "ogv",
@@ -391,7 +403,7 @@ export default function PublishPage() {
 
     if (rejectedFiles.length > 0) {
       warnings.push(
-        "Certains fichiers locaux ne sont pas compatibles web et ont ete ignores (formats acceptes: JPG, PNG, WEBP, GIF, AVIF, BMP, MP4, WEBM, OGG, MOV, MPEG).",
+        "Certains fichiers locaux ne sont pas compatibles web et ont ete ignores (formats acceptes: JPG, JPEG, JFIF, PNG, WEBP, GIF, AVIF, BMP, HEIC, HEIF, TIFF, ICO, MP4, WEBM, OGG, MOV, MPEG).",
       );
     }
 
@@ -835,7 +847,7 @@ export default function PublishPage() {
               </label>
               <input
                 type="file"
-                accept=".jpg,.jpeg,.png,.webp,.gif,.avif,.bmp,.mp4,.webm,.ogv,.ogg,.mov,.mpeg,.mpg,image/jpeg,image/png,image/webp,image/gif,image/avif,image/bmp,video/mp4,video/webm,video/ogg,video/quicktime,video/mpeg"
+                accept=".jpg,.jpeg,.jfif,.png,.webp,.gif,.avif,.bmp,.heic,.heif,.tif,.tiff,.ico,.mp4,.webm,.ogv,.ogg,.mov,.mpeg,.mpg,image/jpeg,image/jfif,image/png,image/webp,image/gif,image/avif,image/bmp,image/heic,image/heif,image/tiff,image/x-icon,image/vnd.microsoft.icon,video/mp4,video/webm,video/ogg,video/quicktime,video/mpeg"
                 multiple
                 onChange={handleMediaUpload}
                 className="block w-full text-xs text-slate-700 file:mr-3 file:rounded-lg file:border-0 file:bg-brand-100 file:px-3 file:py-2 file:font-semibold file:text-brand-800 hover:file:bg-brand-200"

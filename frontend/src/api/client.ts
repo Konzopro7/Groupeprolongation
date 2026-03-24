@@ -655,11 +655,23 @@ export async function uploadListingFiles(files: File[]): Promise<string[]> {
 
   const formData = new FormData();
   files.forEach((file) => formData.append("media[]", file));
-
-  const response = await request<ApiResponse<{ urls?: string[]; url?: string }>>("/uploads", {
-    method: "POST",
-    body: formData,
-  });
+  let response: ApiResponse<{ urls?: string[]; url?: string }>;
+  try {
+    response = await request<ApiResponse<{ urls?: string[]; url?: string }>>("/upload-media", {
+      method: "POST",
+      body: formData,
+    });
+  } catch (error) {
+    const shouldRetryLegacyRoute =
+      error instanceof ApiError && (error.status === 404 || error.status === 405 || error.status === 403);
+    if (!shouldRetryLegacyRoute) {
+      throw error;
+    }
+    response = await request<ApiResponse<{ urls?: string[]; url?: string }>>("/uploads", {
+      method: "POST",
+      body: formData,
+    });
+  }
 
   if (Array.isArray(response.data.urls) && response.data.urls.length > 0) {
     return normalizeMediaArray(response.data.urls);
