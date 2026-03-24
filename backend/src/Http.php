@@ -35,15 +35,24 @@ function normalizeRequestPath(): string
     $uriPath = '/' . ltrim($uriPath, '/');
 
     // Supporte /api/* et aussi les installations dans un sous-dossier (ex: /sinc_admin/api/*).
-    $segments = explode('/', trim($uriPath, '/'));
-    $apiIndex = array_search('api', $segments, true);
+    // Certains mutualises livrent le chemin sous la forme /api/index.php/<route>.
+    $segments = array_values(array_filter(
+        explode('/', trim($uriPath, '/')),
+        static fn(string $segment): bool => $segment !== ''
+    ));
 
+    $apiIndex = array_search('api', $segments, true);
     if ($apiIndex !== false) {
-        $tail = array_slice($segments, $apiIndex + 1);
-        $uriPath = '/' . implode('/', $tail);
+        $segments = array_slice($segments, $apiIndex + 1);
     } elseif ($uriPath === '/api') {
-        $uriPath = '/';
+        $segments = [];
     }
+
+    if (!empty($segments) && strtolower($segments[0]) === 'index.php') {
+        $segments = array_slice($segments, 1);
+    }
+
+    $uriPath = '/' . implode('/', $segments);
 
     return rtrim($uriPath, '/') ?: '/';
 }
