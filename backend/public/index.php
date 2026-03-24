@@ -718,6 +718,199 @@ function detectUploadedMimeType(string $tmpName, string $originalName): string
     return $fallbackByExt[$extension] ?? '';
 }
 
+function getWritableUploadDir(array $config): ?string
+{
+    foreach (getCandidateUploadDirs($config) as $candidateUploadDir) {
+        if (ensureUploadDirExistsAndWritable($candidateUploadDir)) {
+            return $candidateUploadDir;
+        }
+    }
+    return null;
+}
+
+function resolveUploadExtension(string $mimeType, string $originalName, array $allowedMimeMap, array $allowedExtensions): string
+{
+    $extension = $allowedMimeMap[$mimeType] ?? '';
+
+    if ($extension === '' && $mimeType !== '' && str_starts_with($mimeType, 'image/')) {
+        $extFromName = strtolower((string)pathinfo($originalName, PATHINFO_EXTENSION));
+        $extFromName = preg_replace('/[^a-z0-9]/', '', $extFromName) ?: '';
+
+        $imageFallbackMap = [
+            'jpeg' => 'jpg',
+            'jpg' => 'jpg',
+            'jfif' => 'jpg',
+            'png' => 'png',
+            'webp' => 'webp',
+            'gif' => 'gif',
+            'bmp' => 'bmp',
+            'avif' => 'avif',
+            'heic' => 'heic',
+            'heif' => 'heif',
+            'tif' => 'tif',
+            'tiff' => 'tif',
+            'ico' => 'ico',
+        ];
+
+        if ($extFromName !== '' && isset($imageFallbackMap[$extFromName])) {
+            $extension = $imageFallbackMap[$extFromName];
+        } else {
+            $extension = 'jpg';
+        }
+    }
+
+    if ($extension === '') {
+        $fallbackExtension = strtolower((string)pathinfo($originalName, PATHINFO_EXTENSION));
+        $fallbackExtension = preg_replace('/[^a-z0-9]/', '', $fallbackExtension) ?: '';
+
+        if (
+            ($mimeType !== '' && (str_starts_with($mimeType, 'image/') || str_starts_with($mimeType, 'video/')))
+            && in_array($fallbackExtension, $allowedExtensions, true)
+        ) {
+            $extension = $fallbackExtension;
+        }
+    }
+
+    return $extension;
+}
+
+function decodeDataUrlPayload(string $dataUrl): ?array
+{
+    $trimmed = trim($dataUrl);
+    if ($trimmed === '') {
+        return null;
+    }
+
+    if (preg_match('/^data:([^;]+);base64,(.+)$/s', $trimmed, $matches) !== 1) {
+        return null;
+    }
+
+    $mimeType = strtolower(trim((string)$matches[1]));
+    $payload = preg_replace('/\s+/', '', (string)$matches[2]) ?? '';
+    if ($payload === '') {
+        return null;
+    }
+
+    $binary = base64_decode($payload, true);
+    if ($binary === false) {
+        return null;
+    }
+
+    return [
+        'mime' => $mimeType,
+        'binary' => $binary,
+    ];
+}
+
+function handleUploadJsonRoute(array $config): void
+{
+    $input = getJsonInput();
+    $items = $input['files'] ?? null;
+    if (!is_array($items) || empty($items)) {
+        errorResponse('Aucun fichier JSON recu pour upload.', 422);
+        return;
+    }
+
+    $maxUploadFiles = (int)($config['app']['max_upload_files'] ?? 20);
+    $maxUploadFiles = max(1, min($maxUploadFiles, 20));
+    if (count($items) > $maxUploadFiles) {
+        errorResponse('Maximum ' . $maxUploadFiles . ' fichiers media par annonce.', 422);
+        return;
+    }
+
+    $maxUploadSize = (int)($config['app']['max_upload_size'] ?? (25 * 1024 * 1024));
+    if ($maxUploadSize <= 0) {
+        $maxUploadSize = 25 * 1024 * 1024;
+    }
+
+    $uploadDir = getWritableUploadDir($config);
+    if ($uploadDir === null) {
+        errorResponse('Impossible de creer le dossier upload.', 500);
+        return;
+    }
+
+    $allowedMimeMap = getAllowedMediaMimeMap();
+    $allowedExtensions = array_values(array_unique(array_values($allowedMimeMap)));
+    $uploadsUrlBase = rtrim((string)($config['app']['uploads_url_base'] ?? '/api/uploads'), '/');
+    $savedPaths = [];
+    $savedUrls = [];
+
+    foreach ($items as $item) {
+        if (!is_array($item)) {
+            continue;
+        }
+
+        $originalName = (string)($item['name'] ?? 'media');
+        $dataUrl = (string)($item['data_url'] ?? '');
+        $decoded = decodeDataUrlPayload($dataUrl);
+        if ($decoded === null) {
+            foreach ($savedPaths as $path) {
+                if (is_file($path)) {
+                    @unlink($path);
+                }
+            }
+            errorResponse('Format JSON media invalide (data URL attendue).', 422);
+            return;
+        }
+
+        $mimeType = (string)$decoded['mime'];
+        $binary = (string)$decoded['binary'];
+        $fileSize = strlen($binary);
+        if ($fileSize <= 0 || $fileSize > $maxUploadSize) {
+            foreach ($savedPaths as $path) {
+                if (is_file($path)) {
+                    @unlink($path);
+                }
+            }
+            $maxUploadSizeMb = (int)round($maxUploadSize / (1024 * 1024));
+            errorResponse('Un fichier JSON est trop volumineux (max ' . $maxUploadSizeMb . ' MB).', 422);
+            return;
+        }
+
+        $extension = resolveUploadExtension($mimeType, $originalName, $allowedMimeMap, $allowedExtensions);
+        if ($extension === '') {
+            foreach ($savedPaths as $path) {
+                if (is_file($path)) {
+                    @unlink($path);
+                }
+            }
+            errorResponse(
+                'Format media non supporte. Formats acceptes: JPG, JPEG, JFIF, PNG, WEBP, GIF, AVIF, BMP, HEIC, HEIF, TIFF, ICO, MP4, WEBM, OGG, MOV, MPEG.',
+                422
+            );
+            return;
+        }
+
+        $fileName = date('YmdHis') . '_' . bin2hex(random_bytes(8)) . '.' . $extension;
+        $destination = rtrim($uploadDir, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . $fileName;
+        if (@file_put_contents($destination, $binary, LOCK_EX) === false) {
+            foreach ($savedPaths as $path) {
+                if (is_file($path)) {
+                    @unlink($path);
+                }
+            }
+            errorResponse('Impossible de sauvegarder un des fichiers media (fallback JSON).', 500);
+            return;
+        }
+
+        @chmod($destination, 0644);
+        $savedPaths[] = $destination;
+        $savedUrls[] = $uploadsUrlBase . '/' . $fileName;
+    }
+
+    if (empty($savedUrls)) {
+        errorResponse('Aucun media valide recu.', 422);
+        return;
+    }
+
+    jsonResponse([
+        'data' => [
+            'url' => $savedUrls[0] ?? null,
+            'urls' => $savedUrls,
+        ],
+    ], 201);
+}
+
 function handleUploadRoute(array $config): void
 {
     $files = collectIncomingUploadFiles();
@@ -746,14 +939,7 @@ function handleUploadRoute(array $config): void
         $maxUploadSize = 25 * 1024 * 1024;
     }
 
-    $uploadDir = null;
-    foreach (getCandidateUploadDirs($config) as $candidateUploadDir) {
-        if (ensureUploadDirExistsAndWritable($candidateUploadDir)) {
-            $uploadDir = $candidateUploadDir;
-            break;
-        }
-    }
-
+    $uploadDir = getWritableUploadDir($config);
     if ($uploadDir === null) {
         errorResponse('Impossible de creer le dossier upload.', 500);
         return;
@@ -805,47 +991,7 @@ function handleUploadRoute(array $config): void
 
         $originalName = (string)($file['name'] ?? 'media');
         $mimeType = detectUploadedMimeType($tmpName, $originalName);
-        $extension = $allowedMimeMap[$mimeType] ?? '';
-
-        // Accepte tout mime image/* avec extension connue (ou jpg par defaut).
-        if ($extension === '' && $mimeType !== '' && str_starts_with($mimeType, 'image/')) {
-            $extFromName = strtolower((string)pathinfo($originalName, PATHINFO_EXTENSION));
-            $extFromName = preg_replace('/[^a-z0-9]/', '', $extFromName) ?: '';
-
-            $imageFallbackMap = [
-                'jpeg' => 'jpg',
-                'jpg' => 'jpg',
-                'jfif' => 'jpg',
-                'png' => 'png',
-                'webp' => 'webp',
-                'gif' => 'gif',
-                'bmp' => 'bmp',
-                'avif' => 'avif',
-                'heic' => 'heic',
-                'heif' => 'heif',
-                'tif' => 'tif',
-                'tiff' => 'tif',
-                'ico' => 'ico',
-            ];
-
-            if ($extFromName !== '' && isset($imageFallbackMap[$extFromName])) {
-                $extension = $imageFallbackMap[$extFromName];
-            } else {
-                $extension = 'jpg';
-            }
-        }
-
-        if ($extension === '') {
-            $fallbackExtension = strtolower((string)pathinfo($originalName, PATHINFO_EXTENSION));
-            $fallbackExtension = preg_replace('/[^a-z0-9]/', '', $fallbackExtension) ?: '';
-
-            if (
-                ($mimeType !== '' && (str_starts_with($mimeType, 'image/') || str_starts_with($mimeType, 'video/')))
-                && in_array($fallbackExtension, $allowedExtensions, true)
-            ) {
-                $extension = $fallbackExtension;
-            }
-        }
+        $extension = resolveUploadExtension($mimeType, $originalName, $allowedMimeMap, $allowedExtensions);
 
         if ($extension === '') {
             foreach ($savedPaths as $path) {
@@ -922,6 +1068,14 @@ try {
             return;
         }
         handleUploadRoute($config);
+        return;
+    }
+
+    if ($path === '/upload-media-json' && $method === 'POST') {
+        if (!requireAdminAuth()) {
+            return;
+        }
+        handleUploadJsonRoute($config);
         return;
     }
 

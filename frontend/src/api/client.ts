@@ -414,6 +414,34 @@ async function filesToDataUrls(files: File[]): Promise<string[]> {
   return Promise.all(files.map((file) => fileToDataUrl(file)));
 }
 
+function extractUploadedUrls(response: ApiResponse<{ urls?: string[]; url?: string }>): string[] {
+  if (Array.isArray(response.data.urls) && response.data.urls.length > 0) {
+    return normalizeMediaArray(response.data.urls);
+  }
+
+  if (typeof response.data.url === "string" && response.data.url.trim() !== "") {
+    const normalized = toCanonicalMediaReference(response.data.url);
+    return normalized ? [normalized] : [];
+  }
+
+  return [];
+}
+
+async function uploadViaJsonFallback(files: File[]): Promise<string[]> {
+  const dataUrls = await filesToDataUrls(files);
+  const payloadFiles = files.map((file, index) => ({
+    name: file.name,
+    data_url: dataUrls[index] || "",
+  }));
+
+  const response = await request<ApiResponse<{ urls?: string[]; url?: string }>>("/upload-media-json", {
+    method: "POST",
+    body: JSON.stringify({ files: payloadFiles }),
+  });
+
+  return extractUploadedUrls(response);
+}
+
 export async function fetchCategories(): Promise<Category[]> {
   if (USE_MOCK) {
     return sortCategories(getMockCategories());
@@ -655,7 +683,8 @@ export async function uploadListingFiles(files: File[]): Promise<string[]> {
 
   const formData = new FormData();
   files.forEach((file) => formData.append("media[]", file));
-  let response: ApiResponse<{ urls?: string[]; url?: string }>;
+  let response: ApiResponse<{ urls?: string[]; url?: string }> | null = null;
+  let lastError: unknown = null;
   try {
     response = await request<ApiResponse<{ urls?: string[]; url?: string }>>("/upload-media", {
       method: "POST",
@@ -667,22 +696,26 @@ export async function uploadListingFiles(files: File[]): Promise<string[]> {
     if (!shouldRetryLegacyRoute) {
       throw error;
     }
-    response = await request<ApiResponse<{ urls?: string[]; url?: string }>>("/uploads", {
-      method: "POST",
-      body: formData,
-    });
+    lastError = error;
+    try {
+      response = await request<ApiResponse<{ urls?: string[]; url?: string }>>("/uploads", {
+        method: "POST",
+        body: formData,
+      });
+    } catch (legacyError) {
+      lastError = legacyError;
+    }
   }
 
-  if (Array.isArray(response.data.urls) && response.data.urls.length > 0) {
-    return normalizeMediaArray(response.data.urls);
+  if (response) {
+    return extractUploadedUrls(response);
   }
 
-  if (typeof response.data.url === "string" && response.data.url.trim() !== "") {
-    const normalized = toCanonicalMediaReference(response.data.url);
-    return normalized ? [normalized] : [];
+  if (lastError instanceof ApiError && lastError.status === 403) {
+    return uploadViaJsonFallback(files);
   }
 
-  return [];
+  throw lastError instanceof Error ? lastError : new ApiError("Upload media impossible.", 500);
 }
 
 export async function uploadListingImage(file: File): Promise<string> {

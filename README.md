@@ -143,6 +143,7 @@ php -S localhost:8000 backend/router.php
 - `POST /api/contact`
 - `POST /api/uploads` (upload multi-media: images + videos, jusqu a 20 fichiers)
 - `POST /api/upload-media` (route upload robuste anti 403 sur certains mutualises)
+- `POST /api/upload-media-json` (fallback JSON/base64 si le serveur bloque multipart en 403)
 - `GET /api/health` (etat API sans DB)
 - `GET /api/health/db` (test connexion DB + compte categories/listings)
 - `GET /api/auth/me`
