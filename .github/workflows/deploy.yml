@@ -71,6 +71,7 @@ jobs:
           mkdir -p deploy/public_html/api
           cp backend/public/index.php deploy/public_html/api/index.php
           cp backend/public/.htaccess deploy/public_html/api/.htaccess
+          cp backend/config.php deploy/public_html/api/config.php
           cp -R backend/src deploy/public_html/api/src
 
           mkdir -p deploy/public_html/api/uploads
