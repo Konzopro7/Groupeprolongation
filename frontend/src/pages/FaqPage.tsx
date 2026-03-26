@@ -84,45 +84,6 @@ const visitorFaq: FaqItem[] = [
   },
 ];
 
-const adminFaq: FaqItem[] = [
-  {
-    key: "a-1",
-    question: "Comment ajouter une annonce (admin) ?",
-    answer: (
-      <>
-        Connectez-vous sur <Link to="/admin" className="text-brand-700 hover:underline">/admin</Link>, puis cliquez
-        sur <strong>Ajouter une annonce</strong>. Remplissez les champs et validez.
-      </>
-    ),
-  },
-  {
-    key: "a-2",
-    question: "Comment modifier ou supprimer une annonce ?",
-    answer: (
-      <>
-        Depuis <Link to="/admin" className="text-brand-700 hover:underline">/admin</Link>, utilisez les actions{" "}
-        <strong>Modifier</strong> ou <strong>Supprimer</strong> sur la ligne de l annonce.
-      </>
-    ),
-  },
-  {
-    key: "a-3",
-    question: "Combien de photos/videos puis-je ajouter ?",
-    answer: <>Jusqu a 20 medias par annonce (photos et videos).</>,
-  },
-  {
-    key: "a-4",
-    question: "Quels formats de fichiers sont acceptes ?",
-    answer: (
-      <>
-        Images: JPG, JPEG, JFIF, PNG, WEBP, GIF, AVIF, BMP, HEIC, HEIF, TIFF, ICO.
-        <br />
-        Videos: MP4, WEBM, OGG, MOV, MPEG.
-      </>
-    ),
-  },
-];
-
 interface FaqGroupProps {
   title: string;
   description: string;
@@ -176,7 +137,7 @@ export default function FaqPage() {
 
   useSeo({
     title: "FAQ",
-    description: "Guide d utilisation pour visiteurs et administrateur de Groupe Prolongation.",
+    description: "Guide d utilisation pour les visiteurs de Groupe Prolongation.",
   });
 
   return (
@@ -188,9 +149,7 @@ export default function FaqPage() {
           </div>
           <div>
             <h1 className="font-heading text-3xl font-bold text-slate-900">FAQ</h1>
-            <p className="text-sm text-slate-600">
-              Questions frequentes pour les visiteurs et l administrateur.
-            </p>
+            <p className="text-sm text-slate-600">Questions frequentes pour les visiteurs.</p>
           </div>
         </div>
         <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
@@ -202,14 +161,6 @@ export default function FaqPage() {
         title="Pour les visiteurs"
         description="Consulter les annonces, trouver les contacts et obtenir de l aide."
         items={visitorFaq}
-        openKey={openKey}
-        onToggle={(key) => setOpenKey((current) => (current === key ? null : key))}
-      />
-
-      <FaqGroup
-        title="Pour l administrateur"
-        description="Gestion des annonces et des medias depuis l espace admin."
-        items={adminFaq}
         openKey={openKey}
         onToggle={(key) => setOpenKey((current) => (current === key ? null : key))}
       />
