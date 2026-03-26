@@ -1,3 +1,5 @@
+import { Link } from "react-router-dom";
+
 export default function Footer() {
   return (
     <footer className="relative z-10 border-t border-slate-200 bg-white/95 backdrop-blur">
@@ -22,6 +24,9 @@ export default function Footer() {
         <div>
           <p className="text-sm font-semibold text-slate-800">Informations</p>
           <div className="mt-2 flex flex-col gap-2 text-sm text-slate-600">
+            <Link to="/faq" className="rounded-md px-1 transition hover:bg-slate-100 hover:text-slate-900">
+              FAQ
+            </Link>
             <a href="#" className="rounded-md px-1 transition hover:bg-slate-100 hover:text-slate-900">
               Mentions legales
             </a>

@@ -3,6 +3,7 @@ import Layout from "./components/Layout";
 import AdminPage from "./pages/AdminPage";
 import AboutPage from "./pages/AboutPage";
 import ContactPage from "./pages/ContactPage";
+import FaqPage from "./pages/FaqPage";
 import HomePage from "./pages/HomePage";
 import ListingDetailsPage from "./pages/ListingDetailsPage";
 import ListingsPage from "./pages/ListingsPage";
@@ -20,6 +21,7 @@ export default function App() {
         <Route path="/publier/:id" element={<PublishPage />} />
         <Route path="/admin" element={<AdminPage />} />
         <Route path="/a-propos" element={<AboutPage />} />
+        <Route path="/faq" element={<FaqPage />} />
         <Route path="/contact" element={<ContactPage />} />
         <Route path="*" element={<NotFoundPage />} />
       </Route>
