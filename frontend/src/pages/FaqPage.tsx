@@ -1,66 +1,182 @@
 import { ChevronDownIcon, QuestionMarkCircleIcon } from "@heroicons/react/24/outline";
-import { useState } from "react";
+import { ReactNode, useState } from "react";
+import { Link } from "react-router-dom";
+import { companyContact } from "../config/company";
 import { useSeo } from "../hooks/useSeo";
 
 interface FaqItem {
+  key: string;
   question: string;
-  answer: string;
+  answer: ReactNode;
 }
 
-const faqItems: FaqItem[] = [
+const visitorFaq: FaqItem[] = [
   {
-    question: "Est-ce qu un visiteur peut publier une annonce ?",
-    answer:
-      "Non. Les visiteurs ne peuvent pas publier. La publication est reservee uniquement a l administrateur du site.",
+    key: "v-1",
+    question: "Comment rechercher une annonce rapidement ?",
+    answer: (
+      <>
+        Ouvrez la page <Link to="/annonces" className="text-brand-700 hover:underline">Annonces</Link> puis utilisez
+        les filtres (categorie, carburant, prix) et la recherche par mot cle.
+      </>
+    ),
   },
   {
-    question: "Qui peut publier des annonces ?",
-    answer:
-      "Seul le compte admin de votre client (Rodry Kuate) peut publier, modifier et supprimer les annonces.",
+    key: "v-2",
+    question: "Comment contacter Groupe Prolongation ?",
+    answer: (
+      <>
+        Depuis la fiche annonce, cliquez sur <strong>Contacter</strong> ou allez sur{" "}
+        <Link to="/contact" className="text-brand-700 hover:underline">/contact</Link>. Vous pouvez aussi envoyer un
+        email a{" "}
+        <a href={`mailto:${companyContact.publicEmail}`} className="text-brand-700 hover:underline">
+          {companyContact.publicEmail}
+        </a>.
+      </>
+    ),
   },
   {
-    question: "Comment l admin publie une annonce ?",
-    answer:
-      "L administrateur se connecte sur /admin, clique sur Ajouter une annonce, remplit le formulaire, ajoute les medias puis valide la publication.",
+    key: "v-3",
+    question: "Puis-je publier une annonce si je suis visiteur ?",
+    answer: (
+      <>
+        Non. La publication et la gestion des annonces sont reservees uniquement a l administrateur du site.
+      </>
+    ),
   },
   {
-    question: "Combien de photos ou videos puis-je ajouter ?",
-    answer:
-      "Vous pouvez ajouter jusqu a 20 medias par annonce (photos et videos).",
+    key: "v-4",
+    question: "Ou se trouvent les entrepots ?",
+    answer: (
+      <>
+        <a
+          href={companyContact.warehouses[0].mapUrl}
+          target="_blank"
+          rel="noreferrer"
+          className="text-brand-700 hover:underline"
+        >
+          Entrepot Canada: {companyContact.warehouses[0].address}
+        </a>
+        <br />
+        <a
+          href={companyContact.warehouses[1].mapUrl}
+          target="_blank"
+          rel="noreferrer"
+          className="text-brand-700 hover:underline"
+        >
+          Entrepot Cameroun: {companyContact.warehouses[1].address}
+        </a>
+      </>
+    ),
   },
   {
-    question: "Quels formats de fichiers sont acceptes ?",
-    answer:
-      "Images: JPG, JPEG, JFIF, PNG, WEBP, GIF, AVIF, BMP, HEIC, HEIF, TIFF, ICO. Videos: MP4, WEBM, OGG, MOV, MPEG.",
-  },
-  {
-    question: "Pourquoi certains champs changent selon la categorie ?",
-    answer:
-      "Le formulaire adapte automatiquement les attributs selon la categorie choisie (par exemple carburant, transmission, annee, kilometrage pour les vehicules).",
-  },
-  {
-    question: "Comment modifier une annonce existante ?",
-    answer:
-      "Dans /admin, cliquez sur Modifier sur la ligne de l annonce. Mettez les informations a jour puis enregistrez.",
-  },
-  {
-    question: "Comment supprimer une annonce ?",
-    answer:
-      "Dans /admin, cliquez sur Supprimer. Une confirmation est demandee avant la suppression definitive.",
-  },
-  {
+    key: "v-5",
     question: "Que faire en cas de blocage ?",
-    answer:
-      "Contactez le support technique: support@konzotechagency.com avec capture ecran, URL de la page et heure du probleme.",
+    answer: (
+      <>
+        Contactez le support technique a{" "}
+        <a href={`mailto:${companyContact.supportEmail}`} className="text-brand-700 hover:underline">
+          {companyContact.supportEmail}
+        </a>{" "}
+        avec une capture ecran, l URL et l heure du probleme.
+      </>
+    ),
   },
 ];
 
+const adminFaq: FaqItem[] = [
+  {
+    key: "a-1",
+    question: "Comment ajouter une annonce (admin) ?",
+    answer: (
+      <>
+        Connectez-vous sur <Link to="/admin" className="text-brand-700 hover:underline">/admin</Link>, puis cliquez
+        sur <strong>Ajouter une annonce</strong>. Remplissez les champs et validez.
+      </>
+    ),
+  },
+  {
+    key: "a-2",
+    question: "Comment modifier ou supprimer une annonce ?",
+    answer: (
+      <>
+        Depuis <Link to="/admin" className="text-brand-700 hover:underline">/admin</Link>, utilisez les actions{" "}
+        <strong>Modifier</strong> ou <strong>Supprimer</strong> sur la ligne de l annonce.
+      </>
+    ),
+  },
+  {
+    key: "a-3",
+    question: "Combien de photos/videos puis-je ajouter ?",
+    answer: <>Jusqu a 20 medias par annonce (photos et videos).</>,
+  },
+  {
+    key: "a-4",
+    question: "Quels formats de fichiers sont acceptes ?",
+    answer: (
+      <>
+        Images: JPG, JPEG, JFIF, PNG, WEBP, GIF, AVIF, BMP, HEIC, HEIF, TIFF, ICO.
+        <br />
+        Videos: MP4, WEBM, OGG, MOV, MPEG.
+      </>
+    ),
+  },
+];
+
+interface FaqGroupProps {
+  title: string;
+  description: string;
+  items: FaqItem[];
+  openKey: string | null;
+  onToggle: (key: string) => void;
+}
+
+function FaqGroup({ title, description, items, openKey, onToggle }: FaqGroupProps) {
+  return (
+    <section className="space-y-3">
+      <div className="px-1">
+        <h2 className="text-lg font-semibold text-slate-900">{title}</h2>
+        <p className="text-sm text-slate-600">{description}</p>
+      </div>
+      {items.map((item) => {
+        const isOpen = openKey === item.key;
+        return (
+          <article
+            key={item.key}
+            className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-soft"
+          >
+            <button
+              type="button"
+              onClick={() => onToggle(item.key)}
+              className="flex w-full items-center justify-between gap-4 px-5 py-4 text-left"
+              aria-expanded={isOpen}
+            >
+              <p className="text-sm font-semibold text-slate-900 sm:text-base">{item.question}</p>
+              <ChevronDownIcon
+                className={`h-5 w-5 shrink-0 text-slate-500 transition-transform ${
+                  isOpen ? "rotate-180 text-brand-700" : ""
+                }`}
+              />
+            </button>
+
+            {isOpen && (
+              <div className="border-t border-slate-100 px-5 py-4">
+                <div className="text-sm text-slate-700">{item.answer}</div>
+              </div>
+            )}
+          </article>
+        );
+      })}
+    </section>
+  );
+}
+
 export default function FaqPage() {
-  const [openIndex, setOpenIndex] = useState<number>(0);
+  const [openKey, setOpenKey] = useState<string | null>(visitorFaq[0]?.key ?? null);
 
   useSeo({
     title: "FAQ",
-    description: "Retrouvez les reponses aux questions frequentes sur Groupe Prolongation.",
+    description: "Guide d utilisation pour visiteurs et administrateur de Groupe Prolongation.",
   });
 
   return (
@@ -72,43 +188,31 @@ export default function FaqPage() {
           </div>
           <div>
             <h1 className="font-heading text-3xl font-bold text-slate-900">FAQ</h1>
-            <p className="text-sm text-slate-600">Questions frequentes et reponses rapides.</p>
+            <p className="text-sm text-slate-600">
+              Questions frequentes pour les visiteurs et l administrateur.
+            </p>
           </div>
+        </div>
+        <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          Information importante: seuls les administrateurs peuvent ajouter, modifier ou supprimer les annonces.
         </div>
       </section>
 
-      <section className="space-y-3">
-        {faqItems.map((item, index) => {
-          const isOpen = openIndex === index;
+      <FaqGroup
+        title="Pour les visiteurs"
+        description="Consulter les annonces, trouver les contacts et obtenir de l aide."
+        items={visitorFaq}
+        openKey={openKey}
+        onToggle={(key) => setOpenKey((current) => (current === key ? null : key))}
+      />
 
-          return (
-            <article
-              key={item.question}
-              className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-soft"
-            >
-              <button
-                type="button"
-                onClick={() => setOpenIndex(isOpen ? -1 : index)}
-                className="flex w-full items-center justify-between gap-4 px-5 py-4 text-left"
-                aria-expanded={isOpen}
-              >
-                <span className="text-sm font-semibold text-slate-900 sm:text-base">{item.question}</span>
-                <ChevronDownIcon
-                  className={`h-5 w-5 shrink-0 text-slate-500 transition-transform ${
-                    isOpen ? "rotate-180 text-brand-700" : ""
-                  }`}
-                />
-              </button>
-
-              {isOpen && (
-                <div className="border-t border-slate-100 px-5 py-4">
-                  <p className="text-sm text-slate-700">{item.answer}</p>
-                </div>
-              )}
-            </article>
-          );
-        })}
-      </section>
+      <FaqGroup
+        title="Pour l administrateur"
+        description="Gestion des annonces et des medias depuis l espace admin."
+        items={adminFaq}
+        openKey={openKey}
+        onToggle={(key) => setOpenKey((current) => (current === key ? null : key))}
+      />
     </div>
   );
 }

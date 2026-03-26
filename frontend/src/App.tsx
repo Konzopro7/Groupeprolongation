@@ -7,8 +7,10 @@ import FaqPage from "./pages/FaqPage";
 import HomePage from "./pages/HomePage";
 import ListingDetailsPage from "./pages/ListingDetailsPage";
 import ListingsPage from "./pages/ListingsPage";
+import LegalNoticePage from "./pages/LegalNoticePage";
 import NotFoundPage from "./pages/NotFoundPage";
 import PublishPage from "./pages/PublishPage";
+import PrivacyPolicyPage from "./pages/PrivacyPolicyPage";
 
 export default function App() {
   return (
@@ -22,6 +24,8 @@ export default function App() {
         <Route path="/admin" element={<AdminPage />} />
         <Route path="/a-propos" element={<AboutPage />} />
         <Route path="/faq" element={<FaqPage />} />
+        <Route path="/mentions-legales" element={<LegalNoticePage />} />
+        <Route path="/politique-confidentialite" element={<PrivacyPolicyPage />} />
         <Route path="/contact" element={<ContactPage />} />
         <Route path="*" element={<NotFoundPage />} />
       </Route>

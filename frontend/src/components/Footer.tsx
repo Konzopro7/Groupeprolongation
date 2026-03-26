@@ -38,7 +38,14 @@ export default function Footer() {
             {companyContact.warehouses.map((warehouse) => (
               <p key={warehouse.label}>
                 <span className="font-semibold text-slate-700">{warehouse.label}:</span>{" "}
-                {warehouse.address}
+                <a
+                  href={warehouse.mapUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-brand-700 hover:underline"
+                >
+                  {warehouse.address}
+                </a>
               </p>
             ))}
           </div>
@@ -71,12 +78,15 @@ export default function Footer() {
             <Link to="/faq" className="rounded-md px-1 transition hover:bg-slate-100 hover:text-slate-900">
               FAQ
             </Link>
-            <a href="#" className="rounded-md px-1 transition hover:bg-slate-100 hover:text-slate-900">
+            <Link to="/mentions-legales" className="rounded-md px-1 transition hover:bg-slate-100 hover:text-slate-900">
               Mentions legales
-            </a>
-            <a href="#" className="rounded-md px-1 transition hover:bg-slate-100 hover:text-slate-900">
+            </Link>
+            <Link
+              to="/politique-confidentialite"
+              className="rounded-md px-1 transition hover:bg-slate-100 hover:text-slate-900"
+            >
               Politique de confidentialite
-            </a>
+            </Link>
           </div>
         </div>
       </div>

@@ -8,6 +8,8 @@ export interface ContactPhone {
 export interface WarehouseAddress {
   label: string;
   address: string;
+  mapUrl: string;
+  mapEmbedUrl: string;
 }
 
 export interface SocialLink {
@@ -37,10 +39,15 @@ export const companyContact = {
     {
       label: "Entrepot Canada",
       address: "117 BRUNO NANTEL SAINT JEROME",
+      mapUrl: "https://maps.google.com/?q=117+BRUNO+NANTEL+SAINT+JEROME",
+      mapEmbedUrl: "https://www.google.com/maps?q=117+BRUNO+NANTEL+SAINT+JEROME&output=embed",
     },
     {
       label: "Entrepot Cameroun",
       address: "ENTREE DU PETIT MARCHE MISSOKE A COTE DE L EGLISE CATHOLIQUE",
+      mapUrl: "https://maps.google.com/?q=ENTREE+DU+PETIT+MARCHE+MISSOKE+A+COTE+DE+L+EGLISE+CATHOLIQUE",
+      mapEmbedUrl:
+        "https://www.google.com/maps?q=ENTREE+DU+PETIT+MARCHE+MISSOKE+A+COTE+DE+L+EGLISE+CATHOLIQUE&output=embed",
     },
   ] as WarehouseAddress[],
   // Remplace les URLs ci-dessous avec les profils reels du client.

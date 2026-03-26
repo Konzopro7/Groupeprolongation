@@ -6,6 +6,7 @@ import { publicListingsError } from "../utils/publicErrorMessage";
 import ListingCard from "../components/ListingCard";
 import { useSeo } from "../hooks/useSeo";
 import { Listing } from "../types";
+import { companyContact } from "../config/company";
 
 interface HomeShowcaseItem {
   id: string;
@@ -176,6 +177,45 @@ export default function HomePage() {
         <div className="stagger-in grid gap-5 md:grid-cols-3">
           {bottomShowcaseItems.map((item) => (
             <ShowcaseImageCard key={item.id} item={item} imageHeight="h-52 sm:h-56" />
+          ))}
+        </div>
+      </section>
+
+      <section className="space-y-5">
+        <div className="space-y-3">
+          <h2 className="font-heading text-2xl font-bold text-slate-900">Adresses et cartes des entrepots</h2>
+          <p className="text-sm text-slate-600">
+            Consultez les deux points logistiques et ouvrez directement l itineraire.
+          </p>
+        </div>
+
+        <div className="grid gap-5 lg:grid-cols-2">
+          {companyContact.warehouses.map((warehouse) => (
+            <article
+              key={`${warehouse.label}-home-map`}
+              className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-soft"
+            >
+              <div className="border-b border-slate-100 bg-slate-50 px-4 py-3">
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{warehouse.label}</p>
+                <a
+                  href={warehouse.mapUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="mt-1 inline-block text-sm font-semibold text-brand-700 hover:underline"
+                >
+                  {warehouse.address}
+                </a>
+              </div>
+              <div className="h-64">
+                <iframe
+                  src={warehouse.mapEmbedUrl}
+                  title={`Carte ${warehouse.label} accueil`}
+                  loading="lazy"
+                  referrerPolicy="no-referrer-when-downgrade"
+                  className="h-full w-full border-0"
+                />
+              </div>
+            </article>
           ))}
         </div>
       </section>

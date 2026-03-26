@@ -55,7 +55,7 @@ export default function ContactPage() {
   };
 
   return (
-    <div className="mx-auto max-w-2xl space-y-6 page-enter">
+    <div className="mx-auto max-w-5xl space-y-6 page-enter">
       <section>
         <h1 className="font-heading text-3xl font-bold text-slate-900">Contact</h1>
         <p className="mt-1 text-slate-600">
@@ -103,7 +103,14 @@ export default function ContactPage() {
             {companyContact.warehouses.map((warehouse) => (
               <div key={warehouse.label} className="rounded-xl border border-slate-100 bg-slate-50 p-3">
                 <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{warehouse.label}</p>
-                <p className="mt-1 text-sm text-slate-700">{warehouse.address}</p>
+                <a
+                  href={warehouse.mapUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="mt-1 inline-block text-sm text-brand-700 hover:underline"
+                >
+                  {warehouse.address}
+                </a>
               </div>
             ))}
           </div>
@@ -127,11 +134,46 @@ export default function ContactPage() {
           ))}
         </div>
         <p className="mt-3 text-xs text-slate-500">
+          Email public:{" "}
+          <a href={`mailto:${companyContact.publicEmail}`} className="text-brand-700 hover:underline">
+            {companyContact.publicEmail}
+          </a>
+          <br />
           Support technique:{" "}
           <a href={`mailto:${companyContact.supportEmail}`} className="text-brand-700 hover:underline">
             {companyContact.supportEmail}
           </a>
         </p>
+      </section>
+
+      <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-soft">
+        <p className="text-sm font-semibold text-slate-900">Cartes des entrepots</p>
+        <div className="mt-3 grid gap-4 lg:grid-cols-2">
+          {companyContact.warehouses.map((warehouse) => (
+            <article key={`${warehouse.label}-map`} className="overflow-hidden rounded-xl border border-slate-200">
+              <div className="border-b border-slate-100 bg-slate-50 px-3 py-2">
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{warehouse.label}</p>
+                <a
+                  href={warehouse.mapUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="mt-1 inline-block text-sm font-semibold text-brand-700 hover:underline"
+                >
+                  {warehouse.address}
+                </a>
+              </div>
+              <div className="h-64">
+                <iframe
+                  src={warehouse.mapEmbedUrl}
+                  title={`Carte ${warehouse.label}`}
+                  loading="lazy"
+                  referrerPolicy="no-referrer-when-downgrade"
+                  className="h-full w-full border-0"
+                />
+              </div>
+            </article>
+          ))}
+        </div>
       </section>
 
       <form
