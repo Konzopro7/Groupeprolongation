@@ -9,14 +9,19 @@ interface FaqItem {
 
 const faqItems: FaqItem[] = [
   {
-    question: "Comment publier une annonce ?",
+    question: "Est-ce qu un visiteur peut publier une annonce ?",
     answer:
-      "Connectez-vous d abord sur /admin, puis cliquez sur Ajouter une annonce. Remplissez les champs obligatoires, ajoutez vos medias et validez.",
+      "Non. Les visiteurs ne peuvent pas publier. La publication est reservee uniquement a l administrateur du site.",
   },
   {
     question: "Qui peut publier des annonces ?",
     answer:
-      "Seul le compte admin peut publier, modifier et supprimer les annonces. Les visiteurs consultent seulement les annonces.",
+      "Seul le compte admin de votre client (Rodry Kuate) peut publier, modifier et supprimer les annonces.",
+  },
+  {
+    question: "Comment l admin publie une annonce ?",
+    answer:
+      "L administrateur se connecte sur /admin, clique sur Ajouter une annonce, remplit le formulaire, ajoute les medias puis valide la publication.",
   },
   {
     question: "Combien de photos ou videos puis-je ajouter ?",
