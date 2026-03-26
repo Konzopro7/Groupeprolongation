@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { SubmitHandler, useForm } from "react-hook-form";
 import { useSearchParams } from "react-router-dom";
 import { sendContactMessage } from "../api/client";
+import { companyContact } from "../config/company";
 import { publicContactError } from "../utils/publicErrorMessage";
 import { useSeo } from "../hooks/useSeo";
 
@@ -72,6 +73,66 @@ export default function ContactPage() {
           {serverError}
         </div>
       )}
+
+      <section className="grid gap-4 sm:grid-cols-2">
+        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-soft">
+          <p className="text-sm font-semibold text-slate-900">Telephones</p>
+          <div className="mt-3 space-y-3">
+            {companyContact.phones.map((phone) => (
+              <div key={phone.label} className="rounded-xl border border-slate-100 bg-slate-50 p-3">
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{phone.label}</p>
+                <a href={`tel:${phone.tel}`} className="mt-1 block text-sm font-semibold text-brand-700 hover:underline">
+                  {phone.display}
+                </a>
+                <a
+                  href={phone.whatsappUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="mt-2 inline-flex rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 transition hover:bg-emerald-100"
+                >
+                  WhatsApp {phone.label}
+                </a>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-soft">
+          <p className="text-sm font-semibold text-slate-900">Entrepots</p>
+          <div className="mt-3 space-y-3">
+            {companyContact.warehouses.map((warehouse) => (
+              <div key={warehouse.label} className="rounded-xl border border-slate-100 bg-slate-50 p-3">
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{warehouse.label}</p>
+                <p className="mt-1 text-sm text-slate-700">{warehouse.address}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-soft">
+        <p className="text-sm font-semibold text-slate-900">Reseaux sociaux</p>
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          {companyContact.socials.map((social) => (
+            <a
+              key={social.name}
+              href={social.href}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-brand-300 hover:bg-brand-50 hover:text-brand-800"
+            >
+              <img src={social.icon} alt={social.name} className="h-4 w-4 object-contain" />
+              {social.name}
+            </a>
+          ))}
+        </div>
+        <p className="mt-3 text-xs text-slate-500">
+          Support technique:{" "}
+          <a href={`mailto:${companyContact.supportEmail}`} className="text-brand-700 hover:underline">
+            {companyContact.supportEmail}
+          </a>
+        </p>
+      </section>
 
       <form
         onSubmit={handleSubmit(onSubmit)}
