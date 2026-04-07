@@ -169,6 +169,20 @@ function validateListingInput(array $input, bool $isUpdate = false): array
         $cleanData['transmission'] = null;
     }
 
+    if ($hasAnyField(['interior_color', 'interiorColor'])) {
+        $interiorColorInput = $input['interior_color'] ?? $input['interiorColor'] ?? null;
+        $cleanData['interior_color'] = sanitizeString((string)$interiorColorInput, 60);
+    } elseif (!$isUpdate) {
+        $cleanData['interior_color'] = null;
+    }
+
+    if ($hasAnyField(['exterior_color', 'exteriorColor'])) {
+        $exteriorColorInput = $input['exterior_color'] ?? $input['exteriorColor'] ?? null;
+        $cleanData['exterior_color'] = sanitizeString((string)$exteriorColorInput, 60);
+    } elseif (!$isUpdate) {
+        $cleanData['exterior_color'] = null;
+    }
+
     if (!$isUpdate || $hasAnyField(['delivery'])) {
         $deliveryInput = $input['delivery'] ?? null;
         $cleanData['delivery'] = parseBooleanNullable($deliveryInput, 'delivery', $errors);

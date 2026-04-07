@@ -1,10 +1,13 @@
 import {
   CalendarDaysIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon,
   CheckBadgeIcon,
   FireIcon,
   MapPinIcon,
   PhoneIcon,
   TruckIcon,
+  XMarkIcon,
 } from "@heroicons/react/24/outline";
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
@@ -17,6 +20,14 @@ function isVideoMedia(url: string): boolean {
   return /\.(mp4|webm|ogg|mov|avi|mkv|mpeg|mpg|wmv|flv|3gp|3g2)(\?.*)?$/i.test(url);
 }
 
+function getWhatsAppUrl(phone: string | null): string | null {
+  if (!phone) return null;
+  const digits = phone.replace(/\D/g, "");
+  if (!digits) return null;
+  const normalized = digits.startsWith("00") ? digits.slice(2) : digits;
+  return normalized ? `https://wa.me/${normalized}` : null;
+}
+
 export default function ListingDetailsPage() {
   const { id } = useParams();
   const [listing, setListing] = useState<Listing | null>(null);
@@ -24,6 +35,8 @@ export default function ListingDetailsPage() {
   const [error, setError] = useState<string | null>(null);
   const [activeMediaIndex, setActiveMediaIndex] = useState(0);
   const [activeMediaLoadError, setActiveMediaLoadError] = useState(false);
+  const [isLightboxOpen, setIsLightboxOpen] = useState(false);
+  const [lightboxLoadError, setLightboxLoadError] = useState(false);
 
   useSeo({
     title: listing ? listing.title : "Detail annonce",
@@ -41,6 +54,7 @@ export default function ListingDetailsPage() {
       .then((item) => {
         setListing(item);
         setActiveMediaIndex(0);
+        setIsLightboxOpen(false);
         setError(null);
       })
       .catch((apiError: unknown) => {
@@ -52,6 +66,39 @@ export default function ListingDetailsPage() {
   useEffect(() => {
     setActiveMediaLoadError(false);
   }, [activeMediaIndex, listing?.id]);
+
+  useEffect(() => {
+    setLightboxLoadError(false);
+  }, [activeMediaIndex, listing?.id]);
+
+  useEffect(() => {
+    if (!isLightboxOpen || !listing) {
+      return;
+    }
+    const mediaCount = listing.images.length;
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setIsLightboxOpen(false);
+        return;
+      }
+
+      if (mediaCount <= 1) {
+        return;
+      }
+
+      if (event.key === "ArrowLeft") {
+        setActiveMediaIndex((current) => (current - 1 + mediaCount) % mediaCount);
+      }
+
+      if (event.key === "ArrowRight") {
+        setActiveMediaIndex((current) => (current + 1) % mediaCount);
+      }
+    }
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isLightboxOpen, listing]);
 
   if (isLoading) {
     return (
@@ -71,11 +118,28 @@ export default function ListingDetailsPage() {
 
   const activeMediaUrl = listing.images[activeMediaIndex] || listing.images[0] || "";
   const activeIsVideo = activeMediaUrl ? isVideoMedia(activeMediaUrl) : false;
+  const mediaCount = listing.images.length;
+  const whatsappUrl = getWhatsAppUrl(listing.phone);
+  const callUrl = listing.phone ? `tel:${listing.phone.replace(/\s+/g, "")}` : null;
+
+  function openLightbox(index: number) {
+    setActiveMediaIndex(index);
+    setLightboxLoadError(false);
+    setIsLightboxOpen(true);
+  }
+
+  function goToPreviousMedia() {
+    setActiveMediaIndex((current) => (current - 1 + mediaCount) % mediaCount);
+  }
+
+  function goToNextMedia() {
+    setActiveMediaIndex((current) => (current + 1) % mediaCount);
+  }
 
   return (
     <article className="space-y-6 page-enter">
       <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-soft">
-        <div className="h-72 w-full bg-slate-100 sm:h-[26rem]">
+        <div className="group relative h-72 w-full bg-slate-100 sm:h-[26rem]">
           {activeMediaUrl && !activeMediaLoadError ? (
             activeIsVideo ? (
               <video
@@ -85,15 +149,30 @@ export default function ListingDetailsPage() {
                 className="h-full w-full object-cover"
               />
             ) : (
-              <img
-                src={activeMediaUrl}
-                alt={listing.title}
-                onError={() => setActiveMediaLoadError(true)}
-                className="h-full w-full object-cover"
-              />
+              <button
+                type="button"
+                onClick={() => openLightbox(activeMediaIndex)}
+                className="h-full w-full cursor-zoom-in"
+              >
+                <img
+                  src={activeMediaUrl}
+                  alt={listing.title}
+                  onError={() => setActiveMediaLoadError(true)}
+                  className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.02]"
+                />
+              </button>
             )
           ) : (
             <div className="h-full w-full bg-gradient-to-br from-brand-100 via-white to-accent-500/20" />
+          )}
+          {activeMediaUrl && (
+            <button
+              type="button"
+              onClick={() => openLightbox(activeMediaIndex)}
+              className="absolute bottom-3 right-3 rounded-lg bg-slate-900/75 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-900"
+            >
+              Ouvrir en grand
+            </button>
           )}
         </div>
         <div className="space-y-5 p-6">
@@ -118,6 +197,14 @@ export default function ListingDetailsPage() {
             <div className="flex items-center gap-2 text-sm text-slate-700">
               <CheckBadgeIcon className="h-5 w-5 text-brand-600" />
               Transmission: {listing.transmission || "N/A"}
+            </div>
+            <div className="flex items-center gap-2 text-sm text-slate-700">
+              <CheckBadgeIcon className="h-5 w-5 text-brand-600" />
+              Couleur interieur: {listing.interiorColor || "N/A"}
+            </div>
+            <div className="flex items-center gap-2 text-sm text-slate-700">
+              <CheckBadgeIcon className="h-5 w-5 text-brand-600" />
+              Couleur exterieur: {listing.exteriorColor || "N/A"}
             </div>
             <div className="flex items-center gap-2 text-sm text-slate-700">
               <TruckIcon className="h-5 w-5 text-brand-600" />
@@ -173,7 +260,7 @@ export default function ListingDetailsPage() {
                     <button
                       key={`${url}-${index}`}
                       type="button"
-                      onClick={() => setActiveMediaIndex(index)}
+                      onClick={() => openLightbox(index)}
                       className={`overflow-hidden rounded-xl border bg-white text-left transition ${
                         isActive
                           ? "border-brand-500 ring-2 ring-brand-200"
@@ -216,6 +303,24 @@ export default function ListingDetailsPage() {
             >
               Contacter
             </Link>
+            {whatsappUrl && (
+              <a
+                href={whatsappUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="rounded-xl border border-emerald-300 bg-emerald-50 px-5 py-3 text-sm font-semibold text-emerald-700 hover:bg-emerald-100"
+              >
+                WhatsApp vendeur
+              </a>
+            )}
+            {callUrl && (
+              <a
+                href={callUrl}
+                className="rounded-xl border border-brand-300 bg-brand-50 px-5 py-3 text-sm font-semibold text-brand-700 hover:bg-brand-100"
+              >
+                Appeler le vendeur
+              </a>
+            )}
             <Link
               to="/annonces"
               className="rounded-xl border border-slate-300 px-5 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-100"
@@ -225,6 +330,71 @@ export default function ListingDetailsPage() {
           </div>
         </div>
       </div>
+
+      {isLightboxOpen && activeMediaUrl && (
+        <div className="fixed inset-0 z-50 bg-slate-950/90 p-3 sm:p-6">
+          <button
+            type="button"
+            onClick={() => setIsLightboxOpen(false)}
+            className="absolute right-3 top-3 rounded-lg bg-white/10 p-2 text-white hover:bg-white/20"
+            aria-label="Fermer"
+          >
+            <XMarkIcon className="h-6 w-6" />
+          </button>
+
+          <div className="relative mx-auto flex h-full w-full max-w-6xl items-center justify-center">
+            {listing.images.length > 1 && (
+              <>
+                <button
+                  type="button"
+                  onClick={goToPreviousMedia}
+                  className="absolute left-2 z-10 rounded-full bg-white/15 p-2 text-white hover:bg-white/25"
+                  aria-label="Media precedent"
+                >
+                  <ChevronLeftIcon className="h-6 w-6" />
+                </button>
+                <button
+                  type="button"
+                  onClick={goToNextMedia}
+                  className="absolute right-2 z-10 rounded-full bg-white/15 p-2 text-white hover:bg-white/25"
+                  aria-label="Media suivant"
+                >
+                  <ChevronRightIcon className="h-6 w-6" />
+                </button>
+              </>
+            )}
+
+            <div className="w-full overflow-hidden rounded-2xl border border-white/20 bg-black">
+              {!lightboxLoadError ? (
+                activeIsVideo ? (
+                  <video
+                    src={activeMediaUrl}
+                    controls
+                    autoPlay
+                    onError={() => setLightboxLoadError(true)}
+                    className="max-h-[80vh] w-full object-contain"
+                  />
+                ) : (
+                  <img
+                    src={activeMediaUrl}
+                    alt={`${listing.title} media ${activeMediaIndex + 1}`}
+                    onError={() => setLightboxLoadError(true)}
+                    className="max-h-[80vh] w-full object-contain"
+                  />
+                )
+              ) : (
+                <div className="flex h-[60vh] items-center justify-center text-sm text-slate-200">
+                  Impossible d afficher ce media.
+                </div>
+              )}
+            </div>
+          </div>
+
+          <p className="mt-3 text-center text-sm text-white/90">
+            Media {activeMediaIndex + 1} / {listing.images.length}
+          </p>
+        </div>
+      )}
     </article>
   );
 }

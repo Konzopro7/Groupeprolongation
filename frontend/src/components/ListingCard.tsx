@@ -10,11 +10,21 @@ function isVideoMedia(url: string): boolean {
   return /\.(mp4|webm|ogg|mov|avi|mkv|mpeg|mpg|wmv|flv|3gp|3g2)(\?.*)?$/i.test(url);
 }
 
+function getWhatsAppUrl(phone: string | null): string | null {
+  if (!phone) return null;
+  const digits = phone.replace(/\D/g, "");
+  if (!digits) return null;
+  const normalized = digits.startsWith("00") ? digits.slice(2) : digits;
+  return normalized ? `https://wa.me/${normalized}` : null;
+}
+
 export default function ListingCard({ listing }: ListingCardProps) {
   const [coverIndex, setCoverIndex] = useState(0);
   const cover = listing.images[coverIndex] || "";
   const isVideoCover = cover ? isVideoMedia(cover) : false;
   const [coverLoadError, setCoverLoadError] = useState(false);
+  const whatsappUrl = getWhatsAppUrl(listing.phone);
+  const callUrl = listing.phone ? `tel:${listing.phone.replace(/\s+/g, "")}` : null;
 
   useEffect(() => {
     setCoverIndex(0);
@@ -75,17 +85,39 @@ export default function ListingCard({ listing }: ListingCardProps) {
         <div className="grid grid-cols-2 gap-y-2 text-sm text-slate-600">
           <p>Carburant: {listing.fuel || "N/A"}</p>
           <p>Transmission: {listing.transmission || "N/A"}</p>
+          <p>Int.: {listing.interiorColor || "N/A"}</p>
+          <p>Ext.: {listing.exteriorColor || "N/A"}</p>
           <p>Kilometrage: {listing.mileage ? `${listing.mileage.toLocaleString("fr-CA")} km` : "N/A"}</p>
           <p>Annee: {listing.year || "N/A"}</p>
           <p>Ville: {listing.city || listing.location || "N/A"}</p>
           <p>Statut: {listing.status || "N/A"}</p>
         </div>
-        <Link
-          to={`/annonces/${listing.id}`}
-          className="btn-shine inline-flex rounded-xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-700"
-        >
-          Voir l'annonce
-        </Link>
+        <div className="flex flex-wrap gap-2">
+          <Link
+            to={`/annonces/${listing.id}`}
+            className="btn-shine inline-flex rounded-xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-700"
+          >
+            Voir l'annonce
+          </Link>
+          {whatsappUrl && (
+            <a
+              href={whatsappUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex rounded-xl border border-emerald-300 bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-700 transition hover:bg-emerald-100"
+            >
+              WhatsApp
+            </a>
+          )}
+          {callUrl && (
+            <a
+              href={callUrl}
+              className="inline-flex rounded-xl border border-brand-300 bg-brand-50 px-4 py-2 text-sm font-semibold text-brand-700 transition hover:bg-brand-100"
+            >
+              Appeler
+            </a>
+          )}
+        </div>
       </div>
     </article>
   );

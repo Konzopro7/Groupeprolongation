@@ -14,6 +14,8 @@ export interface Listing {
   categoryName: string;
   fuel: string | null;
   transmission: string | null;
+  interiorColor: string | null;
+  exteriorColor: string | null;
   delivery: boolean | null;
   exportAvailable: boolean | null;
   status: string | null;
@@ -45,6 +47,8 @@ export interface NewListingPayload {
   categoryId: number;
   fuel?: string;
   transmission?: string;
+  interiorColor?: string;
+  exteriorColor?: string;
   delivery?: boolean;
   exportAvailable?: boolean;
   status?: string;

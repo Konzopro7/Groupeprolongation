@@ -133,6 +133,8 @@ function mapListingRow(array $row): array
         'category_name' => (string)$row['category_name'],
         'fuel' => ($row['fuel'] ?? null) !== null ? (string)$row['fuel'] : null,
         'transmission' => ($row['transmission'] ?? null) !== null ? (string)$row['transmission'] : null,
+        'interior_color' => ($row['interior_color'] ?? null) !== null ? (string)$row['interior_color'] : null,
+        'exterior_color' => ($row['exterior_color'] ?? null) !== null ? (string)$row['exterior_color'] : null,
         'delivery' => ($row['delivery'] ?? null) !== null ? (int)$row['delivery'] : null,
         'export_available' => ($row['export_available'] ?? null) !== null ? (int)$row['export_available'] : null,
         'status' => ($row['status'] ?? null) !== null ? (string)$row['status'] : null,
@@ -1277,9 +1279,9 @@ try {
 
         $stmt = $pdo->prepare(
             'INSERT INTO listings
-             (title, description, price, category_id, fuel, transmission, delivery, export_available, status, mileage, year, negotiable, phone, city, item_state, price_currency, location, images)
+             (title, description, price, category_id, fuel, transmission, interior_color, exterior_color, delivery, export_available, status, mileage, year, negotiable, phone, city, item_state, price_currency, location, images)
              VALUES
-             (:title, :description, :price, :category_id, :fuel, :transmission, :delivery, :export_available, :status, :mileage, :year, :negotiable, :phone, :city, :item_state, :price_currency, :location, :images)'
+             (:title, :description, :price, :category_id, :fuel, :transmission, :interior_color, :exterior_color, :delivery, :export_available, :status, :mileage, :year, :negotiable, :phone, :city, :item_state, :price_currency, :location, :images)'
         );
         bindValue($stmt, ':title', $cleanData['title']);
         bindValue($stmt, ':description', $cleanData['description']);
@@ -1287,6 +1289,8 @@ try {
         bindValue($stmt, ':category_id', $cleanData['category_id']);
         bindValue($stmt, ':fuel', $cleanData['fuel']);
         bindValue($stmt, ':transmission', $cleanData['transmission']);
+        bindValue($stmt, ':interior_color', $cleanData['interior_color']);
+        bindValue($stmt, ':exterior_color', $cleanData['exterior_color']);
         bindValue($stmt, ':delivery', $cleanData['delivery']);
         bindValue($stmt, ':export_available', $cleanData['export_available']);
         bindValue($stmt, ':status', $cleanData['status']);
@@ -1341,6 +1345,8 @@ try {
                 'category_id',
                 'fuel',
                 'transmission',
+                'interior_color',
+                'exterior_color',
                 'delivery',
                 'export_available',
                 'status',

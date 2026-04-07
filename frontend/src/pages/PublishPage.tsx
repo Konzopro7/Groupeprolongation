@@ -62,6 +62,7 @@ const allowedUploadExtensions = new Set([
 ]);
 const fuelCategoryKeys = new Set(["automobile", "voiture", "voitures", "berline", "camionnette", "suv"]);
 const transmissionCategoryKeys = new Set(["automobile"]);
+const colorCategoryKeys = new Set(["automobile", "voiture", "voitures", "berline", "camionnette", "suv"]);
 const mileageYearCategoryKeys = new Set([
   "automobile",
   "voiture",
@@ -75,6 +76,7 @@ const mileageYearCategoryKeys = new Set([
 interface CategoryAttributeRules {
   fuel: boolean;
   transmission: boolean;
+  colors: boolean;
   mileageYear: boolean;
 }
 
@@ -85,6 +87,8 @@ interface PublishFormValues {
   categoryId: string;
   fuel: string;
   transmission: string;
+  interiorColor: string;
+  exteriorColor: string;
   delivery: boolean;
   exportAvailable: boolean;
   status: string;
@@ -106,7 +110,7 @@ function normalizeCategoryKey(value: string): string {
 
 function getCategoryAttributeRules(category: Category | undefined): CategoryAttributeRules {
   if (!category) {
-    return { fuel: false, transmission: false, mileageYear: false };
+    return { fuel: false, transmission: false, colors: false, mileageYear: false };
   }
 
   const key = normalizeCategoryKey(category.slug || category.name);
@@ -114,6 +118,7 @@ function getCategoryAttributeRules(category: Category | undefined): CategoryAttr
   return {
     fuel: fuelCategoryKeys.has(key),
     transmission: transmissionCategoryKeys.has(key),
+    colors: colorCategoryKeys.has(key),
     mileageYear: mileageYearCategoryKeys.has(key),
   };
 }
@@ -122,6 +127,7 @@ function getAttributeHint(rules: CategoryAttributeRules): string {
   const labels: string[] = [];
   if (rules.fuel) labels.push("Carburant");
   if (rules.transmission) labels.push("Transmission");
+  if (rules.colors) labels.push("Couleur interieur", "Couleur exterieur");
   if (rules.mileageYear) labels.push("Kilometrage", "Annee");
   if (labels.length === 0) return "Aucun attribut vehicule specifique pour cette categorie.";
   return `Attributs actifs pour cette categorie: ${labels.join(", ")}.`;
@@ -184,6 +190,8 @@ export default function PublishPage() {
       categoryId: "",
       fuel: "",
       transmission: "",
+      interiorColor: "",
+      exteriorColor: "",
       delivery: false,
       exportAvailable: false,
       status: "Disponible",
@@ -201,6 +209,7 @@ export default function PublishPage() {
   const categoryRules = getCategoryAttributeRules(selectedCategory);
   const showFuel = categoryRules.fuel;
   const showTransmission = categoryRules.transmission;
+  const showColors = categoryRules.colors;
   const showMileageYear = categoryRules.mileageYear;
 
   useSeo({
@@ -232,11 +241,15 @@ export default function PublishPage() {
     if (!showTransmission) {
       setValue("transmission", "");
     }
+    if (!showColors) {
+      setValue("interiorColor", "");
+      setValue("exteriorColor", "");
+    }
     if (!showMileageYear) {
       setValue("mileage", undefined);
       setValue("year", undefined);
     }
-  }, [setValue, showFuel, showMileageYear, showTransmission]);
+  }, [setValue, showColors, showFuel, showMileageYear, showTransmission]);
 
   useEffect(() => {
     setMediaLoadErrors({});
@@ -261,6 +274,8 @@ export default function PublishPage() {
           categoryId: String(listing.categoryId),
           fuel: listing.fuel || "",
           transmission: listing.transmission || "",
+          interiorColor: listing.interiorColor || "",
+          exteriorColor: listing.exteriorColor || "",
           delivery: Boolean(listing.delivery),
           exportAvailable: Boolean(listing.exportAvailable),
           status: listing.status || "Disponible",
@@ -318,6 +333,8 @@ export default function PublishPage() {
       priceCurrency: "CAD",
       fuel: showFuel ? data.fuel || undefined : undefined,
       transmission: showTransmission ? data.transmission || undefined : undefined,
+      interiorColor: showColors ? data.interiorColor || undefined : undefined,
+      exteriorColor: showColors ? data.exteriorColor || undefined : undefined,
       delivery: Boolean(data.delivery),
       exportAvailable: Boolean(data.exportAvailable),
       status: data.status || "Disponible",
@@ -347,6 +364,8 @@ export default function PublishPage() {
           categoryId: String(saved.categoryId),
           fuel: saved.fuel || "",
           transmission: saved.transmission || "",
+          interiorColor: saved.interiorColor || "",
+          exteriorColor: saved.exteriorColor || "",
           delivery: Boolean(saved.delivery),
           exportAvailable: Boolean(saved.exportAvailable),
           status: saved.status || "Disponible",
@@ -366,6 +385,8 @@ export default function PublishPage() {
           categoryId: "",
           fuel: "",
           transmission: "",
+          interiorColor: "",
+          exteriorColor: "",
           delivery: false,
           exportAvailable: false,
           status: "Disponible",
@@ -674,6 +695,44 @@ export default function PublishPage() {
                   )}
                 </div>
               )}
+            </div>
+          )}
+
+          {showColors && (
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <label className="mb-1 block text-sm font-semibold text-slate-700">Couleur interieur *</label>
+                <input
+                  {...register("interiorColor", {
+                    validate: (value) =>
+                      !showColors ||
+                      value.trim() !== "" ||
+                      "La couleur interieur est obligatoire pour cette categorie.",
+                  })}
+                  className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none ring-brand-300 focus:ring"
+                  placeholder="Ex: Noir"
+                />
+                {errors.interiorColor && (
+                  <p className="mt-1 text-xs text-rose-600">{errors.interiorColor.message}</p>
+                )}
+              </div>
+
+              <div>
+                <label className="mb-1 block text-sm font-semibold text-slate-700">Couleur exterieur *</label>
+                <input
+                  {...register("exteriorColor", {
+                    validate: (value) =>
+                      !showColors ||
+                      value.trim() !== "" ||
+                      "La couleur exterieur est obligatoire pour cette categorie.",
+                  })}
+                  className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none ring-brand-300 focus:ring"
+                  placeholder="Ex: Blanc"
+                />
+                {errors.exteriorColor && (
+                  <p className="mt-1 text-xs text-rose-600">{errors.exteriorColor.message}</p>
+                )}
+              </div>
             </div>
           )}
 
