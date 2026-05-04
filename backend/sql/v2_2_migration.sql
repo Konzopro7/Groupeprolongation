@@ -15,7 +15,7 @@ ALTER TABLE categories
     ON DELETE SET NULL;
 
 ALTER TABLE listings
-    ADD COLUMN price_currency CHAR(3) NOT NULL DEFAULT 'CAD' AFTER price,
+    ADD COLUMN price_currency CHAR(3) NOT NULL DEFAULT 'XAF' AFTER price,
     ADD COLUMN transmission VARCHAR(60) NULL AFTER fuel,
     ADD COLUMN delivery TINYINT(1) NULL AFTER transmission,
     ADD COLUMN export_available TINYINT(1) NULL AFTER delivery,
@@ -27,7 +27,7 @@ ALTER TABLE listings
 
 UPDATE listings
 SET city = COALESCE(city, location),
-    price_currency = COALESCE(NULLIF(price_currency, ''), 'CAD')
+    price_currency = COALESCE(NULLIF(price_currency, ''), 'XAF')
 WHERE 1 = 1;
 
 INSERT INTO categories (id, name, slug, parent_id) VALUES

@@ -69,3 +69,37 @@ export interface ContactPayload {
   email: string;
   message: string;
 }
+
+export interface AdminDashboardCategoryStat {
+  categoryId: number;
+  categoryName: string;
+  total: number;
+}
+
+export interface AdminDashboardMonthStat {
+  month: string;
+  listingsCount: number;
+  contactsCount: number;
+}
+
+export interface AdminDashboardStats {
+  totals: {
+    listings: number;
+    categories: number;
+    contacts: number;
+    available: number;
+    reserved: number;
+    sold: number;
+    listingsLast30Days: number;
+    contactsLast30Days: number;
+  };
+  financial: {
+    totalValue: number;
+    avgPrice: number;
+    minPrice: number;
+    maxPrice: number;
+    currency: string;
+  };
+  byCategory: AdminDashboardCategoryStat[];
+  byMonth: AdminDashboardMonthStat[];
+}

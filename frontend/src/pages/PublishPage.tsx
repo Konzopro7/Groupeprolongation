@@ -330,7 +330,7 @@ export default function PublishPage() {
       description: data.description,
       price: Number(data.price),
       categoryId: Number(data.categoryId),
-      priceCurrency: "CAD",
+      priceCurrency: "XAF",
       fuel: showFuel ? data.fuel || undefined : undefined,
       transmission: showTransmission ? data.transmission || undefined : undefined,
       interiorColor: showColors ? data.interiorColor || undefined : undefined,
@@ -607,7 +607,7 @@ export default function PublishPage() {
 
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
-              <label className="mb-1 block text-sm font-semibold text-slate-700">Prix (CAD) *</label>
+              <label className="mb-1 block text-sm font-semibold text-slate-700">Prix (FCFA) *</label>
               <input
                 type="number"
                 min="0"

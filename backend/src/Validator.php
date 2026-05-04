@@ -265,12 +265,12 @@ function validateListingInput(array $input, bool $isUpdate = false): array
     }
 
     if (!$isUpdate || $hasAnyField(['price_currency', 'priceCurrency'])) {
-        $currencyInput = strtoupper(trim((string)($input['price_currency'] ?? $input['priceCurrency'] ?? 'CAD')));
+        $currencyInput = strtoupper(trim((string)($input['price_currency'] ?? $input['priceCurrency'] ?? 'XAF')));
         if ($currencyInput === '') {
-            $currencyInput = 'CAD';
+            $currencyInput = 'XAF';
         }
         if (!preg_match('/^[A-Z]{3}$/', $currencyInput)) {
-            $errors['price_currency'] = 'Code devise invalide (ex: CAD).';
+            $errors['price_currency'] = 'Code devise invalide (ex: XAF).';
         } else {
             $cleanData['price_currency'] = $currencyInput;
         }

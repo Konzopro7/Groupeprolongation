@@ -15,6 +15,7 @@ import { fetchListingById } from "../api/client";
 import { publicListingDetailError } from "../utils/publicErrorMessage";
 import { useSeo } from "../hooks/useSeo";
 import { Listing } from "../types";
+import { formatPrice } from "../utils/price";
 
 function isVideoMedia(url: string): boolean {
   return /\.(mp4|webm|ogg|mov|avi|mkv|mpeg|mpg|wmv|flv|3gp|3g2)(\?.*)?$/i.test(url);
@@ -180,7 +181,7 @@ export default function ListingDetailsPage() {
             <p className="text-sm font-semibold text-brand-700">{listing.categoryName}</p>
             <h1 className="font-heading text-3xl font-bold text-slate-900">{listing.title}</h1>
             <p className="mt-2 text-3xl font-bold text-brand-700">
-              {listing.price.toLocaleString("fr-CA")} {listing.priceCurrency}
+              {formatPrice(listing.price, listing.priceCurrency)}
             </p>
             {listing.negotiable && (
               <p className="mt-2 inline-flex rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-700">

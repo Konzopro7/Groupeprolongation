@@ -144,7 +144,7 @@ function mapListingRow(array $row): array
         'phone' => ($row['phone'] ?? null) !== null ? (string)$row['phone'] : null,
         'city' => ($row['city'] ?? null) !== null ? (string)$row['city'] : null,
         'item_state' => ($row['item_state'] ?? null) !== null ? (string)$row['item_state'] : null,
-        'price_currency' => ($row['price_currency'] ?? null) !== null ? (string)$row['price_currency'] : 'CAD',
+        'price_currency' => ($row['price_currency'] ?? null) !== null ? (string)$row['price_currency'] : 'XAF',
         'location' => ($row['location'] ?? null) !== null ? (string)$row['location'] : null,
         'images' => $images,
         'created_at' => (string)$row['created_at'],
@@ -165,6 +165,159 @@ function fetchListingById(PDO $pdo, int $id): ?array
     $row = $stmt->fetch();
 
     return $row ? mapListingRow($row) : null;
+}
+
+function fetchAdminStats(PDO $pdo): array
+{
+    $totalsRow = $pdo->query(
+        'SELECT
+            COUNT(*) AS listings,
+            SUM(CASE WHEN LOWER(TRIM(COALESCE(status, ""))) = "disponible" THEN 1 ELSE 0 END) AS available,
+            SUM(CASE WHEN LOWER(TRIM(COALESCE(status, ""))) = "reserve" THEN 1 ELSE 0 END) AS reserved,
+            SUM(CASE WHEN LOWER(TRIM(COALESCE(status, ""))) = "vendu" THEN 1 ELSE 0 END) AS sold,
+            SUM(CASE WHEN created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY) THEN 1 ELSE 0 END) AS listings_30d
+         FROM listings'
+    )->fetch();
+
+    $categoriesCount = (int)$pdo->query('SELECT COUNT(*) FROM categories')->fetchColumn();
+    $contactsCount = (int)$pdo->query('SELECT COUNT(*) FROM contact_messages')->fetchColumn();
+    $contactsLast30Days = (int)$pdo->query(
+        'SELECT COUNT(*) FROM contact_messages WHERE created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)'
+    )->fetchColumn();
+
+    $financialRow = $pdo->query(
+        'SELECT
+            COALESCE(SUM(price), 0) AS total_value,
+            COALESCE(AVG(price), 0) AS avg_price,
+            COALESCE(MIN(price), 0) AS min_price,
+            COALESCE(MAX(price), 0) AS max_price
+         FROM listings'
+    )->fetch();
+
+    $currency = $pdo->query(
+        'SELECT COALESCE(NULLIF(price_currency, ""), "XAF")
+         FROM listings
+         ORDER BY id DESC
+         LIMIT 1'
+    )->fetchColumn();
+    if (!is_string($currency) || trim($currency) === '') {
+        $currency = 'XAF';
+    }
+
+    $categoryRows = $pdo->query(
+        'SELECT
+            c.id AS category_id,
+            c.name AS category_name,
+            COUNT(l.id) AS total
+         FROM categories c
+         LEFT JOIN listings l ON l.category_id = c.id
+         GROUP BY c.id, c.name
+         HAVING COUNT(l.id) > 0
+         ORDER BY total DESC, c.name ASC
+         LIMIT 8'
+    )->fetchAll();
+
+    $listingsMonthlyRows = $pdo->query(
+        'SELECT
+            DATE_FORMAT(created_at, "%Y-%m") AS month_key,
+            COUNT(*) AS total
+         FROM listings
+         WHERE created_at >= DATE_SUB(CURDATE(), INTERVAL 6 MONTH)
+         GROUP BY DATE_FORMAT(created_at, "%Y-%m")
+         ORDER BY month_key ASC'
+    )->fetchAll();
+
+    $contactsMonthlyRows = $pdo->query(
+        'SELECT
+            DATE_FORMAT(created_at, "%Y-%m") AS month_key,
+            COUNT(*) AS total
+         FROM contact_messages
+         WHERE created_at >= DATE_SUB(CURDATE(), INTERVAL 6 MONTH)
+         GROUP BY DATE_FORMAT(created_at, "%Y-%m")
+         ORDER BY month_key ASC'
+    )->fetchAll();
+
+    $listingsByMonth = [];
+    foreach ($listingsMonthlyRows as $row) {
+        $month = (string)($row['month_key'] ?? '');
+        if ($month === '') {
+            continue;
+        }
+        $listingsByMonth[$month] = (int)($row['total'] ?? 0);
+    }
+
+    $contactsByMonth = [];
+    foreach ($contactsMonthlyRows as $row) {
+        $month = (string)($row['month_key'] ?? '');
+        if ($month === '') {
+            continue;
+        }
+        $contactsByMonth[$month] = (int)($row['total'] ?? 0);
+    }
+
+    $months = [];
+    $now = new DateTimeImmutable('first day of this month');
+    for ($index = 5; $index >= 0; $index--) {
+        $monthValue = $now->sub(new DateInterval('P' . $index . 'M'))->format('Y-m');
+        $months[] = $monthValue;
+    }
+
+    $byMonth = array_map(
+        static fn(string $month): array => [
+            'month' => $month,
+            'listingsCount' => $listingsByMonth[$month] ?? 0,
+            'contactsCount' => $contactsByMonth[$month] ?? 0,
+            // Legacy keys for compatibility with old frontend payload mapping.
+            'listings_count' => $listingsByMonth[$month] ?? 0,
+            'contacts_count' => $contactsByMonth[$month] ?? 0,
+        ],
+        $months
+    );
+
+    $byCategory = array_map(
+        static fn(array $row): array => [
+            'categoryId' => (int)($row['category_id'] ?? 0),
+            'categoryName' => (string)($row['category_name'] ?? ''),
+            'total' => (int)($row['total'] ?? 0),
+            // Legacy keys for compatibility with old frontend payload mapping.
+            'category_id' => (int)($row['category_id'] ?? 0),
+            'category_name' => (string)($row['category_name'] ?? ''),
+        ],
+        $categoryRows
+    );
+
+    return [
+        'totals' => [
+            'listings' => (int)($totalsRow['listings'] ?? 0),
+            'categories' => $categoriesCount,
+            'contacts' => $contactsCount,
+            'available' => (int)($totalsRow['available'] ?? 0),
+            'reserved' => (int)($totalsRow['reserved'] ?? 0),
+            'sold' => (int)($totalsRow['sold'] ?? 0),
+            'listingsLast30Days' => (int)($totalsRow['listings_30d'] ?? 0),
+            'contactsLast30Days' => $contactsLast30Days,
+            // Legacy keys for compatibility with old frontend payload mapping.
+            'listings_last_30_days' => (int)($totalsRow['listings_30d'] ?? 0),
+            'contacts_last_30_days' => $contactsLast30Days,
+        ],
+        'financial' => [
+            'totalValue' => (float)($financialRow['total_value'] ?? 0),
+            'avgPrice' => (float)($financialRow['avg_price'] ?? 0),
+            'minPrice' => (float)($financialRow['min_price'] ?? 0),
+            'maxPrice' => (float)($financialRow['max_price'] ?? 0),
+            'currency' => strtoupper(trim($currency)),
+            // Legacy keys for compatibility with old frontend payload mapping.
+            'total_value' => (float)($financialRow['total_value'] ?? 0),
+            'avg_price' => (float)($financialRow['avg_price'] ?? 0),
+            'min_price' => (float)($financialRow['min_price'] ?? 0),
+            'max_price' => (float)($financialRow['max_price'] ?? 0),
+        ],
+        'byCategory' => $byCategory,
+        'byMonth' => $byMonth,
+        // Legacy keys for compatibility with old frontend payload mapping.
+        'by_category' => $byCategory,
+        'by_month' => $byMonth,
+    ];
 }
 
 function bindValue(PDOStatement $stmt, string $param, mixed $value): void
@@ -1183,6 +1336,17 @@ try {
     }
 
     $pdo = Database::getConnection($config);
+
+    if ($path === '/stats' && $method === 'GET') {
+        if (!requireAdminAuth()) {
+            return;
+        }
+
+        jsonResponse([
+            'data' => fetchAdminStats($pdo),
+        ]);
+        return;
+    }
 
     if ($path === '/categories' && $method === 'GET') {
         $stmt = $pdo->query(

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { Listing } from "../types";
+import { formatPrice } from "../utils/price";
 
 interface ListingCardProps {
   listing: Listing;
@@ -80,7 +81,7 @@ export default function ListingCard({ listing }: ListingCardProps) {
           {listing.title}
         </h3>
         <p className="text-xl font-bold text-brand-700">
-          {listing.price.toLocaleString("fr-CA")} {listing.priceCurrency}
+          {formatPrice(listing.price, listing.priceCurrency)}
         </p>
         <div className="grid grid-cols-2 gap-y-2 text-sm text-slate-600">
           <p>Carburant: {listing.fuel || "N/A"}</p>

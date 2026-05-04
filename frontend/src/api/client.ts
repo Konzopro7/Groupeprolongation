@@ -1,4 +1,5 @@
 import {
+  AdminDashboardStats,
   Category,
   ContactPayload,
   Listing,
@@ -172,7 +173,7 @@ function mapListing(raw: Record<string, unknown>): Listing {
     phone: (raw.phone as string | null) ?? null,
     city,
     itemState: (raw.item_state as string | null) ?? null,
-    priceCurrency: String(raw.price_currency ?? "CAD"),
+    priceCurrency: String(raw.price_currency ?? "XAF"),
     location: city || legacyLocation,
     images,
     createdAt: String(raw.created_at ?? ""),
@@ -269,7 +270,7 @@ function getSeedListings(categories: Category[]): Listing[] {
       phone: "+1 514 555 1240",
       city: "Montreal",
       itemState: "Occasion",
-      priceCurrency: "CAD",
+      priceCurrency: "XAF",
       location: "Montreal",
       images: ["https://images.unsplash.com/photo-1549921296-3a6b0e8dd1e0?auto=format&fit=crop&w=1200&q=80"],
       createdAt: new Date().toISOString(),
@@ -295,7 +296,7 @@ function getSeedListings(categories: Category[]): Listing[] {
       phone: "+1 438 555 7788",
       city: "Laval",
       itemState: "Occasion",
-      priceCurrency: "CAD",
+      priceCurrency: "XAF",
       location: "Laval",
       images: ["https://images.unsplash.com/photo-1494905998402-395d579af36f?auto=format&fit=crop&w=1200&q=80"],
       createdAt: new Date().toISOString(),
@@ -321,7 +322,7 @@ function getSeedListings(categories: Category[]): Listing[] {
       phone: "+1 450 555 3344",
       city: "Quebec",
       itemState: "Bon etat",
-      priceCurrency: "CAD",
+      priceCurrency: "XAF",
       location: "Quebec",
       images: ["https://images.unsplash.com/photo-1558981806-ec527fa84c39?auto=format&fit=crop&w=1200&q=80"],
       createdAt: new Date().toISOString(),
@@ -564,7 +565,7 @@ export async function createListing(payload: NewListingPayload): Promise<Listing
       phone: payload.phone || null,
       city: payload.city || null,
       itemState: payload.itemState || null,
-      priceCurrency: payload.priceCurrency || "CAD",
+      priceCurrency: payload.priceCurrency || "XAF",
       location: payload.city || payload.location || null,
       images: finalMediaUrls,
       createdAt: new Date().toISOString(),
@@ -594,7 +595,7 @@ export async function createListing(payload: NewListingPayload): Promise<Listing
       phone: payload.phone,
       city: payload.city,
       item_state: payload.itemState,
-      price_currency: payload.priceCurrency || "CAD",
+      price_currency: payload.priceCurrency || "XAF",
       location: payload.location || payload.city,
       images: finalMediaUrls.length > 0 ? finalMediaUrls : undefined,
       image_url: finalMediaUrls[0],
@@ -649,7 +650,7 @@ export async function updateListing(id: number, payload: NewListingPayload): Pro
       phone: payload.phone || null,
       city: payload.city || null,
       itemState: payload.itemState || null,
-      priceCurrency: payload.priceCurrency || current.priceCurrency || "CAD",
+      priceCurrency: payload.priceCurrency || current.priceCurrency || "XAF",
       location: payload.city || payload.location || null,
       images: finalMediaUrls,
     };
@@ -680,7 +681,7 @@ export async function updateListing(id: number, payload: NewListingPayload): Pro
       phone: payload.phone,
       city: payload.city,
       item_state: payload.itemState,
-      price_currency: payload.priceCurrency || "CAD",
+      price_currency: payload.priceCurrency || "XAF",
       location: payload.location || payload.city,
       images: finalMediaUrls.length > 0 ? finalMediaUrls : undefined,
       image_url: finalMediaUrls[0],
@@ -831,8 +832,8 @@ export async function uploadListingImage(file: File): Promise<string> {
 
 export async function sendContactMessage(payload: ContactPayload): Promise<void> {
   if (USE_MOCK) {
-    const current = readStorage<ContactPayload[]>(MOCK_CONTACTS_KEY, []);
-    writeStorage(MOCK_CONTACTS_KEY, [...current, payload]);
+    const current = readStorage<Array<ContactPayload & { created_at: string }>>(MOCK_CONTACTS_KEY, []);
+    writeStorage(MOCK_CONTACTS_KEY, [...current, { ...payload, created_at: new Date().toISOString() }]);
     return;
   }
 
@@ -840,6 +841,182 @@ export async function sendContactMessage(payload: ContactPayload): Promise<void>
     method: "POST",
     body: JSON.stringify(payload),
   });
+}
+
+function toMonthKey(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  return `${year}-${month}`;
+}
+
+function getLastMonths(count: number): string[] {
+  const months: string[] = [];
+  const now = new Date();
+  now.setDate(1);
+  for (let index = count - 1; index >= 0; index -= 1) {
+    const copy = new Date(now);
+    copy.setMonth(now.getMonth() - index);
+    const month = String(copy.getMonth() + 1).padStart(2, "0");
+    months.push(`${copy.getFullYear()}-${month}`);
+  }
+  return months;
+}
+
+function buildMockAdminStats(): AdminDashboardStats {
+  const listings = getMockListings();
+  const categories = getMockCategories();
+  const contacts = readStorage<Array<{ created_at?: string }>>(MOCK_CONTACTS_KEY, []);
+
+  const now = Date.now();
+  const days30 = 30 * 24 * 60 * 60 * 1000;
+  const listingsLast30Days = listings.filter((entry) => {
+    const created = new Date(entry.createdAt).getTime();
+    return Number.isFinite(created) && now - created <= days30;
+  }).length;
+
+  const contactsLast30Days = contacts.filter((entry) => {
+    const raw = typeof entry === "object" && entry && "created_at" in entry
+      ? String((entry as { created_at?: string }).created_at || "")
+      : "";
+    const created = new Date(raw).getTime();
+    return Number.isFinite(created) && now - created <= days30;
+  }).length;
+
+  const byCategory = categories
+    .map((category) => ({
+      categoryId: category.id,
+      categoryName: category.name,
+      total: listings.filter((entry) => entry.categoryId === category.id).length,
+    }))
+    .filter((entry) => entry.total > 0)
+    .sort((a, b) => b.total - a.total)
+    .slice(0, 8);
+
+  const monthKeys = getLastMonths(6);
+  const listingsMap = new Map<string, number>();
+  const contactsMap = new Map<string, number>();
+
+  listings.forEach((entry) => {
+    const key = toMonthKey(entry.createdAt);
+    if (!key) return;
+    listingsMap.set(key, (listingsMap.get(key) || 0) + 1);
+  });
+
+  contacts.forEach((entry) => {
+    const key = toMonthKey(String((entry as { created_at?: string }).created_at || ""));
+    if (!key) return;
+    contactsMap.set(key, (contactsMap.get(key) || 0) + 1);
+  });
+
+  const byMonth = monthKeys.map((month) => ({
+    month,
+    listingsCount: listingsMap.get(month) || 0,
+    contactsCount: contactsMap.get(month) || 0,
+  }));
+
+  const prices = listings.map((entry) => Number(entry.price)).filter((value) => Number.isFinite(value));
+  const totalValue = prices.reduce((sum, value) => sum + value, 0);
+
+  return {
+    totals: {
+      listings: listings.length,
+      categories: categories.length,
+      contacts: contacts.length,
+      available: listings.filter((entry) => (entry.status || "").toLowerCase() === "disponible").length,
+      reserved: listings.filter((entry) => (entry.status || "").toLowerCase() === "reserve").length,
+      sold: listings.filter((entry) => (entry.status || "").toLowerCase() === "vendu").length,
+      listingsLast30Days,
+      contactsLast30Days,
+    },
+    financial: {
+      totalValue,
+      avgPrice: prices.length > 0 ? totalValue / prices.length : 0,
+      minPrice: prices.length > 0 ? Math.min(...prices) : 0,
+      maxPrice: prices.length > 0 ? Math.max(...prices) : 0,
+      currency: "XAF",
+    },
+    byCategory,
+    byMonth,
+  };
+}
+
+function toRecord(value: unknown): Record<string, unknown> {
+  return typeof value === "object" && value !== null ? (value as Record<string, unknown>) : {};
+}
+
+function toStatNumber(value: unknown): number {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : 0;
+}
+
+function mapAdminStats(raw: Record<string, unknown>): AdminDashboardStats {
+  const totalsRaw = toRecord(raw.totals);
+  const financialRaw = toRecord(raw.financial);
+
+  const byCategoryRaw = Array.isArray(raw.byCategory)
+    ? raw.byCategory
+    : Array.isArray(raw.by_category)
+      ? raw.by_category
+      : [];
+
+  const byMonthRaw = Array.isArray(raw.byMonth)
+    ? raw.byMonth
+    : Array.isArray(raw.by_month)
+      ? raw.by_month
+      : [];
+
+  return {
+    totals: {
+      listings: toStatNumber(totalsRaw.listings),
+      categories: toStatNumber(totalsRaw.categories),
+      contacts: toStatNumber(totalsRaw.contacts),
+      available: toStatNumber(totalsRaw.available),
+      reserved: toStatNumber(totalsRaw.reserved),
+      sold: toStatNumber(totalsRaw.sold),
+      listingsLast30Days: toStatNumber(totalsRaw.listingsLast30Days ?? totalsRaw.listings_last_30_days),
+      contactsLast30Days: toStatNumber(totalsRaw.contactsLast30Days ?? totalsRaw.contacts_last_30_days),
+    },
+    financial: {
+      totalValue: toStatNumber(financialRaw.totalValue ?? financialRaw.total_value),
+      avgPrice: toStatNumber(financialRaw.avgPrice ?? financialRaw.avg_price),
+      minPrice: toStatNumber(financialRaw.minPrice ?? financialRaw.min_price),
+      maxPrice: toStatNumber(financialRaw.maxPrice ?? financialRaw.max_price),
+      currency: String(financialRaw.currency ?? "XAF"),
+    },
+    byCategory: byCategoryRaw.map((entry) => {
+      const row = toRecord(entry);
+      return {
+        categoryId: toStatNumber(row.categoryId ?? row.category_id),
+        categoryName: String(row.categoryName ?? row.category_name ?? "Categorie"),
+        total: toStatNumber(row.total),
+      };
+    }),
+    byMonth: byMonthRaw.map((entry) => {
+      const row = toRecord(entry);
+      return {
+        month: String(row.month ?? ""),
+        listingsCount: toStatNumber(row.listingsCount ?? row.listings_count),
+        contactsCount: toStatNumber(row.contactsCount ?? row.contacts_count),
+      };
+    }),
+  };
+}
+
+export async function fetchAdminStats(): Promise<AdminDashboardStats> {
+  if (USE_MOCK) {
+    const session = getMockAdminSession();
+    if (!session.authenticated) {
+      throw new ApiError("Authentification admin requise.", 401);
+    }
+    return buildMockAdminStats();
+  }
+
+  const response = await request<ApiResponse<Record<string, unknown>>>("/stats");
+  return mapAdminStats(response.data);
 }
 
 export async function fetchAdminSession(): Promise<AdminSessionResponse> {
