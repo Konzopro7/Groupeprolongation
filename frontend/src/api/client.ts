@@ -101,6 +101,7 @@ function normalizeMediaArray(values: unknown[]): string[] {
 interface AdminSessionResponse {
   authenticated: boolean;
   username: string | null;
+  csrfToken?: string | null;
 }
 
 export class ApiError extends Error {
@@ -118,6 +119,81 @@ export class ApiError extends Error {
 type ApiResponse<T> = {
   data: T;
 };
+
+let csrfTokenCache: string | null = null;
+let csrfTokenPromise: Promise<string | null> | null = null;
+
+function readCsrfTokenFromData(data: unknown): string | null {
+  if (typeof data !== "object" || data === null) {
+    return null;
+  }
+
+  const source = data as Record<string, unknown>;
+  const candidate = source.csrf_token ?? source.csrfToken;
+  if (typeof candidate !== "string" || candidate.trim() === "") {
+    return null;
+  }
+
+  return candidate.trim();
+}
+
+function saveCsrfTokenFromPayload(payload: unknown): void {
+  if (typeof payload !== "object" || payload === null) {
+    return;
+  }
+
+  const data = (payload as { data?: unknown }).data;
+  const token = readCsrfTokenFromData(data);
+  if (token) {
+    csrfTokenCache = token;
+  }
+}
+
+async function fetchCsrfToken(): Promise<string | null> {
+  try {
+    const response = await fetch(`${RESOLVED_API_BASE_URL}/auth/csrf`, {
+      method: "GET",
+      credentials: "include",
+      headers: {
+        Accept: "application/json",
+      },
+    });
+
+    if (!response.ok) {
+      return null;
+    }
+
+    const payload = (await response.json()) as { data?: Record<string, unknown> };
+    const token = readCsrfTokenFromData(payload.data);
+    if (token) {
+      csrfTokenCache = token;
+    }
+    return token;
+  } catch {
+    return null;
+  }
+}
+
+async function ensureCsrfToken(): Promise<string | null> {
+  if (csrfTokenCache) {
+    return csrfTokenCache;
+  }
+
+  if (csrfTokenPromise) {
+    return csrfTokenPromise;
+  }
+
+  csrfTokenPromise = fetchCsrfToken().finally(() => {
+    csrfTokenPromise = null;
+  });
+
+  return csrfTokenPromise;
+}
+
+function isMutatingMethod(method?: string): boolean {
+  const normalized = String(method || "GET").toUpperCase();
+  return ["POST", "PUT", "DELETE", "PATCH"].includes(normalized);
+}
 
 function toNumberOrNull(value: unknown): number | null {
   if (value === null || value === undefined || value === "") {
@@ -384,7 +460,17 @@ function filterMockListings(listings: Listing[], filters: ListingFilters): Listi
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const headers = new Headers(init.headers || {});
+  const method = String(init.method || "GET").toUpperCase();
+  const isMutating = isMutatingMethod(method);
   const isFormData = init.body instanceof FormData;
+
+  if (isMutating && !headers.has("X-CSRF-Token")) {
+    const csrfToken = await ensureCsrfToken();
+    if (csrfToken) {
+      headers.set("X-CSRF-Token", csrfToken);
+    }
+  }
+
   if (!headers.has("Content-Type") && init.body && !isFormData) {
     headers.set("Content-Type", "application/json");
   }
@@ -401,6 +487,7 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   if (rawText) {
     try {
       payload = JSON.parse(rawText);
+      saveCsrfTokenFromPayload(payload);
     } catch {
       payload = {};
     }
@@ -408,8 +495,12 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
 
   if (!response.ok) {
     const errorPayload = payload as { error?: string; details?: Record<string, string> };
+    const errorMessage = errorPayload.error || "Une erreur est survenue cote serveur.";
+    if (isMutating && response.status === 403 && /csrf/i.test(errorMessage)) {
+      csrfTokenCache = null;
+    }
     throw new ApiError(
-      errorPayload.error || "Une erreur est survenue cote serveur.",
+      errorMessage,
       response.status,
       errorPayload.details,
     );
@@ -1006,6 +1097,19 @@ function mapAdminStats(raw: Record<string, unknown>): AdminDashboardStats {
   };
 }
 
+function mapAdminSession(raw: Record<string, unknown>): AdminSessionResponse {
+  const token = readCsrfTokenFromData(raw);
+  if (token) {
+    csrfTokenCache = token;
+  }
+
+  return {
+    authenticated: Boolean(raw.authenticated),
+    username: typeof raw.username === "string" ? raw.username : null,
+    csrfToken: token,
+  };
+}
+
 export async function fetchAdminStats(): Promise<AdminDashboardStats> {
   if (USE_MOCK) {
     const session = getMockAdminSession();
@@ -1024,8 +1128,8 @@ export async function fetchAdminSession(): Promise<AdminSessionResponse> {
     return getMockAdminSession();
   }
 
-  const response = await request<ApiResponse<AdminSessionResponse>>("/auth/me");
-  return response.data;
+  const response = await request<ApiResponse<Record<string, unknown>>>("/auth/me");
+  return mapAdminSession(response.data);
 }
 
 export async function loginAdmin(username: string, password: string): Promise<AdminSessionResponse> {
@@ -1038,11 +1142,11 @@ export async function loginAdmin(username: string, password: string): Promise<Ad
     throw new ApiError("Identifiants invalides.", 401);
   }
 
-  const response = await request<ApiResponse<AdminSessionResponse>>("/auth/login", {
+  const response = await request<ApiResponse<Record<string, unknown>>>("/auth/login", {
     method: "POST",
     body: JSON.stringify({ username, password }),
   });
-  return response.data;
+  return mapAdminSession(response.data);
 }
 
 export async function logoutAdmin(): Promise<void> {
@@ -1054,4 +1158,5 @@ export async function logoutAdmin(): Promise<void> {
   await request<ApiResponse<{ success: boolean }>>("/auth/logout", {
     method: "POST",
   });
+  csrfTokenCache = null;
 }

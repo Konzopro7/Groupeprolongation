@@ -50,8 +50,170 @@ require $sourceDir . '/Database.php';
 require $sourceDir . '/Http.php';
 require $sourceDir . '/Validator.php';
 
+function getClientIpAddress(): string
+{
+    $ip = $_SERVER['REMOTE_ADDR'] ?? '';
+    if (!is_string($ip) || trim($ip) === '') {
+        return '0.0.0.0';
+    }
+
+    return trim($ip);
+}
+
+function normalizeOriginValue(string $value): string
+{
+    $raw = trim($value);
+    if ($raw === '') {
+        return '';
+    }
+
+    $parts = parse_url($raw);
+    if (!is_array($parts)) {
+        return '';
+    }
+
+    $scheme = strtolower((string)($parts['scheme'] ?? ''));
+    $host = strtolower((string)($parts['host'] ?? ''));
+    if ($scheme === '' || $host === '' || !in_array($scheme, ['http', 'https'], true)) {
+        return '';
+    }
+
+    $origin = $scheme . '://' . $host;
+    if (isset($parts['port']) && is_int($parts['port'])) {
+        $port = $parts['port'];
+        $isDefaultPort = ($scheme === 'https' && $port === 443) || ($scheme === 'http' && $port === 80);
+        if (!$isDefaultPort) {
+            $origin .= ':' . $port;
+        }
+    }
+
+    return $origin;
+}
+
+function getCurrentOrigin(bool $isHttps): string
+{
+    $host = $_SERVER['HTTP_HOST'] ?? ($_SERVER['SERVER_NAME'] ?? 'localhost');
+    if (!is_string($host) || trim($host) === '') {
+        $host = 'localhost';
+    }
+
+    return ($isHttps ? 'https://' : 'http://') . trim($host);
+}
+
+function getConfiguredAllowedOrigins(array $config, string $currentOrigin): array
+{
+    $origins = [];
+
+    $singleOrigin = trim((string)($config['app']['allowed_origin'] ?? ''));
+    $multipleOrigins = trim((string)($config['app']['allowed_origins'] ?? ''));
+
+    $rawValues = [];
+    if ($singleOrigin !== '') {
+        $rawValues[] = $singleOrigin;
+    }
+    if ($multipleOrigins !== '') {
+        $rawValues = array_merge($rawValues, explode(',', $multipleOrigins));
+    }
+
+    foreach ($rawValues as $value) {
+        $trimmed = trim((string)$value);
+        if ($trimmed === '') {
+            continue;
+        }
+
+        if ($trimmed === '*') {
+            return ['*'];
+        }
+
+        $normalized = normalizeOriginValue($trimmed);
+        if ($normalized !== '') {
+            $origins[] = $normalized;
+        }
+    }
+
+    if (empty($origins)) {
+        $origins[] = normalizeOriginValue($currentOrigin);
+    }
+
+    return array_values(array_unique(array_filter($origins)));
+}
+
+function applySecurityHeaders(bool $isHttps): void
+{
+    header('X-Content-Type-Options: nosniff');
+    header('X-Frame-Options: SAMEORIGIN');
+    header('Referrer-Policy: strict-origin-when-cross-origin');
+    header('Permissions-Policy: geolocation=(), camera=(), microphone=()');
+    header('Cross-Origin-Resource-Policy: same-site');
+    header('Cross-Origin-Opener-Policy: same-origin');
+    header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+    header('Pragma: no-cache');
+    if ($isHttps) {
+        header('Strict-Transport-Security: max-age=31536000; includeSubDomains');
+    }
+}
+
+function applyCorsHeaders(array $config, string $requestOrigin, string $currentOrigin): bool
+{
+    $allowedOrigins = getConfiguredAllowedOrigins($config, $currentOrigin);
+    $normalizedRequestOrigin = normalizeOriginValue($requestOrigin);
+    $isOriginAllowed = true;
+    $originToReturn = '';
+
+    if ($normalizedRequestOrigin !== '') {
+        if (in_array('*', $allowedOrigins, true) || in_array($normalizedRequestOrigin, $allowedOrigins, true)) {
+            $originToReturn = $normalizedRequestOrigin;
+        } else {
+            $isOriginAllowed = false;
+        }
+    } elseif (!in_array('*', $allowedOrigins, true)) {
+        // Same-origin request without Origin header: keep deterministic value.
+        $originToReturn = $currentOrigin;
+    }
+
+    if ($originToReturn !== '') {
+        header('Access-Control-Allow-Origin: ' . $originToReturn);
+        header('Access-Control-Allow-Credentials: true');
+        header('Vary: Origin');
+    } elseif (in_array('*', $allowedOrigins, true)) {
+        header('Access-Control-Allow-Origin: *');
+    }
+
+    header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
+    header('Access-Control-Allow-Headers: Content-Type, Authorization, X-CSRF-Token');
+    header('Access-Control-Max-Age: 600');
+
+    return $isOriginAllowed;
+}
+
 $isHttps = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
     || (($_SERVER['SERVER_PORT'] ?? '') === '443');
+
+applySecurityHeaders($isHttps);
+
+$currentOrigin = getCurrentOrigin($isHttps);
+$requestOrigin = $_SERVER['HTTP_ORIGIN'] ?? '';
+$requestOrigin = is_string($requestOrigin) ? trim($requestOrigin) : '';
+$isAllowedCorsRequest = applyCorsHeaders($config, $requestOrigin, $currentOrigin);
+
+$requestMethod = strtoupper((string)($_SERVER['REQUEST_METHOD'] ?? 'GET'));
+if (!$isAllowedCorsRequest) {
+    errorResponse('Origine non autorisee.', 403);
+    exit;
+}
+
+if ($requestMethod === 'OPTIONS') {
+    http_response_code(204);
+    exit;
+}
+
+ini_set('session.use_strict_mode', '1');
+ini_set('session.use_only_cookies', '1');
+ini_set('session.cookie_httponly', '1');
+if ($isHttps) {
+    ini_set('session.cookie_secure', '1');
+}
+
 $sessionName = (string)($config['app']['session_name'] ?? 'gp_admin_session');
 if (session_status() !== PHP_SESSION_ACTIVE) {
     $savePath = (string)ini_get('session.save_path');
@@ -72,31 +234,6 @@ if (session_status() !== PHP_SESSION_ACTIVE) {
         'samesite' => 'Lax',
     ]);
     session_start();
-}
-
-$allowedOrigin = $config['app']['allowed_origin'] ?? '*';
-$requestOrigin = $_SERVER['HTTP_ORIGIN'] ?? '';
-$requestOrigin = is_string($requestOrigin) ? trim($requestOrigin) : '';
-
-// If config is '*', echo back the request Origin to allow cookies (credentials).
-// Browsers reject `Access-Control-Allow-Origin: *` when `credentials: include` is used.
-if ($allowedOrigin === '*' && $requestOrigin !== '') {
-    header('Access-Control-Allow-Origin: ' . $requestOrigin);
-    header('Vary: Origin');
-    header('Access-Control-Allow-Credentials: true');
-} else {
-    header('Access-Control-Allow-Origin: ' . $allowedOrigin);
-    if ($allowedOrigin !== '*') {
-        header('Access-Control-Allow-Credentials: true');
-        header('Vary: Origin');
-    }
-}
-header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type, Authorization');
-
-if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'OPTIONS') {
-    http_response_code(204);
-    exit;
 }
 
 function mapListingRow(array $row): array
@@ -360,9 +497,189 @@ function verifyAdminPassword(string $password, array $config): bool
     return hash_equals($plain, $password);
 }
 
+function getAppConfig(): array
+{
+    $config = $GLOBALS['config'] ?? [];
+    return is_array($config) ? $config : [];
+}
+
+function getSessionTtlSeconds(): int
+{
+    $config = getAppConfig();
+    $ttl = (int)($config['app']['session_ttl_seconds'] ?? 7200);
+
+    return max(300, min($ttl, 86400));
+}
+
+function getRequestFingerprint(): string
+{
+    $userAgent = (string)($_SERVER['HTTP_USER_AGENT'] ?? '');
+    $ip = getClientIpAddress();
+
+    return hash('sha256', $userAgent . '|' . $ip);
+}
+
+function clearAdminSession(): void
+{
+    unset($_SESSION['is_admin'], $_SESSION['admin_username'], $_SESSION['auth_time'], $_SESSION['last_activity'], $_SESSION['fingerprint']);
+}
+
+function getOrCreateCsrfToken(): string
+{
+    if (!empty($_SESSION['csrf_token']) && is_string($_SESSION['csrf_token'])) {
+        return $_SESSION['csrf_token'];
+    }
+
+    try {
+        $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+    } catch (Throwable) {
+        $_SESSION['csrf_token'] = bin2hex(openssl_random_pseudo_bytes(32));
+    }
+
+    return (string)$_SESSION['csrf_token'];
+}
+
 function isAdminAuthenticated(): bool
 {
-    return !empty($_SESSION['is_admin']) && !empty($_SESSION['admin_username']);
+    if (empty($_SESSION['is_admin']) || empty($_SESSION['admin_username'])) {
+        return false;
+    }
+
+    $lastActivity = (int)($_SESSION['last_activity'] ?? $_SESSION['auth_time'] ?? 0);
+    if ($lastActivity <= 0 || (time() - $lastActivity) > getSessionTtlSeconds()) {
+        clearAdminSession();
+        return false;
+    }
+
+    $sessionFingerprint = (string)($_SESSION['fingerprint'] ?? '');
+    if ($sessionFingerprint !== '' && !hash_equals($sessionFingerprint, getRequestFingerprint())) {
+        clearAdminSession();
+        return false;
+    }
+
+    $_SESSION['last_activity'] = time();
+    getOrCreateCsrfToken();
+
+    return true;
+}
+
+function isStateChangingMethod(): bool
+{
+    $method = strtoupper((string)($_SERVER['REQUEST_METHOD'] ?? 'GET'));
+    return in_array($method, ['POST', 'PUT', 'DELETE', 'PATCH'], true);
+}
+
+function requireCsrfToken(): bool
+{
+    if (!isStateChangingMethod()) {
+        return true;
+    }
+
+    $sessionToken = getOrCreateCsrfToken();
+    $headerToken = (string)($_SERVER['HTTP_X_CSRF_TOKEN'] ?? '');
+    if ($headerToken === '' || !hash_equals($sessionToken, $headerToken)) {
+        errorResponse('Requete refusee (CSRF). Recharge la page puis reessaie.', 403);
+        return false;
+    }
+
+    return true;
+}
+
+function getRateLimitFilePath(string $scope, string $identity): string
+{
+    $baseDir = rtrim(sys_get_temp_dir(), DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . 'gp_rate_limits';
+    if (!is_dir($baseDir)) {
+        @mkdir($baseDir, 0700, true);
+    }
+
+    $hash = hash('sha256', $scope . '|' . $identity);
+    return $baseDir . DIRECTORY_SEPARATOR . $scope . '_' . $hash . '.json';
+}
+
+function consumeRateLimit(string $scope, int $maxAttempts, int $windowSeconds): array
+{
+    $identity = getClientIpAddress();
+    $filePath = getRateLimitFilePath($scope, $identity);
+    $now = time();
+    $windowStart = $now - $windowSeconds;
+    $attempts = [];
+
+    $handle = @fopen($filePath, 'c+');
+    if ($handle === false) {
+        return ['allowed' => true, 'retry_after' => 0];
+    }
+
+    try {
+        if (!flock($handle, LOCK_EX)) {
+            fclose($handle);
+            return ['allowed' => true, 'retry_after' => 0];
+        }
+
+        $raw = stream_get_contents($handle);
+        if (is_string($raw) && trim($raw) !== '') {
+            $decoded = json_decode($raw, true);
+            if (is_array($decoded)) {
+                foreach ($decoded as $value) {
+                    if (is_int($value) || (is_string($value) && ctype_digit($value))) {
+                        $attempts[] = (int)$value;
+                    }
+                }
+            }
+        }
+
+        $attempts = array_values(array_filter(
+            $attempts,
+            static fn(int $timestamp): bool => $timestamp >= $windowStart
+        ));
+
+        if (count($attempts) >= $maxAttempts) {
+            $oldest = min($attempts);
+            $retryAfter = max(1, ($oldest + $windowSeconds) - $now);
+            ftruncate($handle, 0);
+            rewind($handle);
+            fwrite($handle, json_encode($attempts));
+            fflush($handle);
+            flock($handle, LOCK_UN);
+            fclose($handle);
+            return ['allowed' => false, 'retry_after' => $retryAfter];
+        }
+
+        $attempts[] = $now;
+        ftruncate($handle, 0);
+        rewind($handle);
+        fwrite($handle, json_encode($attempts));
+        fflush($handle);
+        flock($handle, LOCK_UN);
+        fclose($handle);
+        return ['allowed' => true, 'retry_after' => 0];
+    } catch (Throwable) {
+        @flock($handle, LOCK_UN);
+        @fclose($handle);
+        return ['allowed' => true, 'retry_after' => 0];
+    }
+}
+
+function requireRateLimit(string $scope, int $maxAttempts, int $windowSeconds, string $message): bool
+{
+    $maxAttempts = max(1, $maxAttempts);
+    $windowSeconds = max(10, $windowSeconds);
+    $result = consumeRateLimit($scope, $maxAttempts, $windowSeconds);
+    if (!($result['allowed'] ?? true)) {
+        $retryAfter = (int)($result['retry_after'] ?? 60);
+        header('Retry-After: ' . $retryAfter);
+        errorResponse($message, 429);
+        return false;
+    }
+
+    return true;
+}
+
+function clearRateLimit(string $scope): void
+{
+    $filePath = getRateLimitFilePath($scope, getClientIpAddress());
+    if (is_file($filePath)) {
+        @unlink($filePath);
+    }
 }
 
 function requireAdminAuth(): bool
@@ -372,6 +689,24 @@ function requireAdminAuth(): bool
         return false;
     }
     return true;
+}
+
+function requireAdminMutationAccess(array $config): bool
+{
+    if (!requireAdminAuth()) {
+        return false;
+    }
+
+    if (!requireCsrfToken()) {
+        return false;
+    }
+
+    return requireRateLimit(
+        'admin_write',
+        (int)($config['app']['admin_write_rate_limit_attempts'] ?? 120),
+        (int)($config['app']['admin_write_rate_limit_window_seconds'] ?? 600),
+        'Trop d actions admin en peu de temps. Reessaie dans quelques minutes.'
+    );
 }
 
 function isDebugMode(array $config): bool
@@ -430,16 +765,31 @@ function mapPdoExceptionToPublicMessage(PDOException $exception): string
 
 function handleAuthMeRoute(): void
 {
+    $isAuthenticated = isAdminAuthenticated();
     jsonResponse([
         'data' => [
-            'authenticated' => isAdminAuthenticated(),
-            'username' => isAdminAuthenticated() ? (string)$_SESSION['admin_username'] : null,
+            'authenticated' => $isAuthenticated,
+            'username' => $isAuthenticated ? (string)$_SESSION['admin_username'] : null,
+            'csrf_token' => getOrCreateCsrfToken(),
         ],
     ]);
 }
 
 function handleAuthLoginRoute(array $config): void
 {
+    if (!requireCsrfToken()) {
+        return;
+    }
+
+    if (!requireRateLimit(
+        'admin_login',
+        (int)($config['app']['login_rate_limit_attempts'] ?? 8),
+        (int)($config['app']['login_rate_limit_window_seconds'] ?? 900),
+        'Trop de tentatives de connexion. Reessaie plus tard.'
+    )) {
+        return;
+    }
+
     $input = getJsonInput();
     $username = trim((string)($input['username'] ?? ''));
     $password = (string)($input['password'] ?? '');
@@ -461,20 +811,31 @@ function handleAuthLoginRoute(array $config): void
     }
 
     session_regenerate_id(true);
+    clearAdminSession();
     $_SESSION['is_admin'] = true;
     $_SESSION['admin_username'] = $expectedUsername;
     $_SESSION['auth_time'] = time();
+    $_SESSION['last_activity'] = time();
+    $_SESSION['fingerprint'] = getRequestFingerprint();
+    $_SESSION['csrf_token'] = getOrCreateCsrfToken();
+    clearRateLimit('admin_login');
 
     jsonResponse([
         'data' => [
             'authenticated' => true,
             'username' => $expectedUsername,
+            'csrf_token' => (string)$_SESSION['csrf_token'],
         ],
     ]);
 }
 
 function handleAuthLogoutRoute(): void
 {
+    if (isAdminAuthenticated() && !requireCsrfToken()) {
+        return;
+    }
+
+    clearAdminSession();
     $_SESSION = [];
     if (ini_get('session.use_cookies')) {
         $params = session_get_cookie_params();
@@ -493,6 +854,15 @@ function handleAuthLogoutRoute(): void
     jsonResponse([
         'data' => [
             'success' => true,
+        ],
+    ]);
+}
+
+function handleAuthCsrfRoute(): void
+{
+    jsonResponse([
+        'data' => [
+            'csrf_token' => getOrCreateCsrfToken(),
         ],
     ]);
 }
@@ -1216,7 +1586,7 @@ function handleUploadRoute(array $config): void
 }
 
 try {
-    $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
+    $method = strtoupper((string)($_SERVER['REQUEST_METHOD'] ?? 'GET'));
     $path = normalizeRequestPath();
     if ($path === '/index.php') {
         $routeFromQuery = null;
@@ -1249,6 +1619,11 @@ try {
         return;
     }
 
+    if ($path === '/auth/csrf' && $method === 'GET') {
+        handleAuthCsrfRoute();
+        return;
+    }
+
     if ($path === '/auth/login' && $method === 'POST') {
         handleAuthLoginRoute($config);
         return;
@@ -1260,7 +1635,7 @@ try {
     }
 
     if (in_array($path, ['/uploads', '/upload-media', '/files', '/media-store'], true) && $method === 'POST') {
-        if (!requireAdminAuth()) {
+        if (!requireAdminMutationAccess($config)) {
             return;
         }
         handleUploadRoute($config);
@@ -1268,7 +1643,7 @@ try {
     }
 
     if (in_array($path, ['/upload-media-json', '/files-json', '/media-store-json'], true) && $method === 'POST') {
-        if (!requireAdminAuth()) {
+        if (!requireAdminMutationAccess($config)) {
             return;
         }
         handleUploadJsonRoute($config);
@@ -1287,6 +1662,9 @@ try {
     }
 
     if ($path === '/health/db' && $method === 'GET') {
+        if (!requireAdminAuth()) {
+            return;
+        }
         try {
             $pdo = Database::getConnection($config);
             $activeDb = (string)$pdo->query('SELECT DATABASE()')->fetchColumn();
@@ -1427,7 +1805,7 @@ try {
     }
 
     if ($path === '/listings' && $method === 'POST') {
-        if (!requireAdminAuth()) {
+        if (!requireAdminMutationAccess($config)) {
             return;
         }
         $input = getJsonInput();
@@ -1488,7 +1866,7 @@ try {
         }
 
         if ($method === 'PUT') {
-            if (!requireAdminAuth()) {
+            if (!requireAdminMutationAccess($config)) {
                 return;
             }
             $input = getJsonInput();
@@ -1560,7 +1938,7 @@ try {
         }
 
         if ($method === 'DELETE') {
-            if (!requireAdminAuth()) {
+            if (!requireAdminMutationAccess($config)) {
                 return;
             }
             $stmt = $pdo->prepare('DELETE FROM listings WHERE id = :id');
@@ -1578,6 +1956,15 @@ try {
     }
 
     if ($path === '/contact' && $method === 'POST') {
+        if (!requireRateLimit(
+            'contact_post',
+            (int)($config['app']['contact_rate_limit_attempts'] ?? 20),
+            (int)($config['app']['contact_rate_limit_window_seconds'] ?? 3600),
+            'Trop de messages envoyes. Reessaie plus tard.'
+        )) {
+            return;
+        }
+
         $input = getJsonInput();
         $validation = validateContactInput($input);
         if (!empty($validation['errors'])) {

@@ -1,24 +1,10 @@
-Options -Indexes
+﻿Options -Indexes
 
-<IfModule mod_mime.c>
-    AddType image/avif .avif
-    AddType image/webp .webp
-    AddType image/jpeg .jpg .jpeg
-    AddType image/jpeg .jfif
-    AddType image/png .png
-    AddType image/gif .gif
-    AddType image/bmp .bmp
-    AddType image/heic .heic
-    AddType image/heif .heif
-    AddType image/tiff .tif .tiff
-    AddType image/x-icon .ico
-    AddType video/mp4 .mp4
-    AddType video/webm .webm
-    AddType video/ogg .ogg .ogv
-    AddType video/quicktime .mov
-    AddType video/mpeg .mpeg .mpg
-</IfModule>
-
-<FilesMatch "\.(php|phtml|php3|php4|php5|phar)$">
-    Require all denied
+# Interdit l execution de scripts dans le dossier media.
+<FilesMatch "\.(php[0-9]?|phtml|phar|cgi|pl|py|sh|bash)$">
+  Require all denied
 </FilesMatch>
+
+<IfModule mod_php.c>
+  php_flag engine off
+</IfModule>

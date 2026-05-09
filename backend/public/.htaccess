@@ -1,4 +1,13 @@
 RewriteEngine On
+Options -Indexes
+
+# Bloque l'acces direct aux sources/config.
+RewriteRule ^src/ - [F,L,NC]
+RewriteRule ^config\.php$ - [F,L,NC]
+RewriteRule ^\. - [F,L]
+
+# Bloque toute tentative d'execution de scripts dans uploads.
+RewriteRule ^uploads/.*\.(php[0-9]?|phtml|phar|cgi|pl|py|sh|bash)$ - [F,L,NC]
 
 # Laisse les fichiers/dossiers statiques uniquement pour GET/HEAD.
 # Important: POST /api/uploads doit passer dans index.php meme si /uploads est un dossier.
