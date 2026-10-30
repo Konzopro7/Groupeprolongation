@@ -99,14 +99,14 @@ mysql -u root -p -e "USE groupeprolongation; SHOW TABLES; SELECT id,name,parent_
 
 ### Config DB
 
-Configurer `backend/config.php` avec les identifiants MySQL:
+Pour le developpement local, configurer `backend/config.php` avec les identifiants MySQL:
 - `host`
 - `port`
 - `name`
 - `user`
 - `pass`
 
-Sur l hebergeur, le fichier deploye est en general **`public_html/.../api/config.php`** (copie de `backend/config.php`). Les valeurs par defaut (`root`, mot de passe vide, base `groupeprolongation`) ne fonctionnent **pas** sur un mutualise : il faut les remplacer par celles de **cPanel > MySQL Databases** (utilisateur MySQL dedie + mot de passe + nom de la base). **`DB_HOST` est souvent `localhost`.**
+En production, configure **`public_html/api/config.php` directement dans cPanel** avec les identifiants de **cPanel > MySQL Databases**. Le fichier `backend/config.php` du depot sert de modele: le workflow GitHub ne l'envoie jamais et preserve le fichier de production. Utilise un utilisateur MySQL dedie, le nom complet de la base et son mot de passe. **`DB_HOST` est souvent `localhost`.** Les valeurs DB et admin du modele sont volontairement vides: elles ne permettent pas d'utiliser accidentellement `root` ou le compte admin par defaut.
 
 ### Depannage: message « Erreur base de donnees » sur l accueil
 
@@ -129,8 +129,10 @@ Generation du hash (en local avec PHP):
 php -r "echo password_hash('TonMotDePasseFortIci', PASSWORD_DEFAULT), PHP_EOL;"
 ```
 
-Copier le resultat dans `admin_password_hash`.
-Tu peux aussi utiliser `ADMIN_USERNAME` et `ADMIN_PASSWORD_HASH` via variables d'environnement GreenGeeks.
+Copier le resultat dans `admin_password_hash` du fichier de production `public_html/api/config.php`.
+Tu peux aussi configurer `ADMIN_USERNAME` et `ADMIN_PASSWORD_HASH` comme variables d'environnement PHP chez GreenGeeks. Ne committe jamais de mot de passe ou de vrai fichier de configuration de production.
+
+En production, `allowed_origin` doit etre `https://groupeprolongation.com` et `allowed_origins` doit contenir seulement `https://www.groupeprolongation.com`. Ne mets pas `localhost` dans la configuration de production.
 
 ### Lancement local (si PHP installe)
 
@@ -188,9 +190,9 @@ php -S localhost:8000 backend/router.php
 2. Uploader dans `public_html/api/`:
    - `backend/public/index.php`
    - `backend/public/.htaccess`
-   - `backend/config.php`
+   - `backend/config.php` renomme en `config.php` lors de la premiere installation seulement
    - `backend/src/` (dossier complet)
-3. Modifier `public_html/api/config.php` avec tes identifiants MySQL GreenGeeks.
+3. Modifier `public_html/api/config.php` avec tes identifiants MySQL GreenGeeks et ton hash admin. Ne remplace pas ce fichier avec une copie contenant des valeurs locales.
 4. Importer `backend/sql/schema.sql` via phpMyAdmin.
 5. Tester dans le navigateur:
    - `https://groupeprolongation.com/api/categories`
@@ -234,8 +236,8 @@ Dans `GitHub > Settings > Secrets and variables > Actions > New repository secre
 ### Important
 
 - Le workflow n efface pas tout le serveur (`dangerous-clean-slate: false`).
-- Configure `public_html/api/config.php` avec tes identifiants MySQL production avant le premier deploy.
-- Le workflow n envoie pas `config.php` pour eviter d ecraser tes identifiants DB a chaque deploy.
+- Cree et configure `public_html/api/config.php` avant le premier deploy. Le workflow ne le cree ni ne le remplace; il le preserve aux deploys suivants.
+- Le modele contient des valeurs DB/admin vides et n'autorise par defaut que les origines de production.
 - Si ton FTP ouvre directement `public_html`, mets `FTP_SERVER_DIR=/`.
 
 ## Notes V2
