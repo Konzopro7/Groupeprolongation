@@ -54,9 +54,12 @@ Importer le schema:
 
 `backend/sql/schema.sql`
 
-Si ta base existe deja (version precedente), execute d abord:
+Si ta base existe deja, applique les migrations manquantes dans l ordre numerique,
+en commencant par la version qui suit celle de ta base:
 
-`backend/sql/v2_2_migration.sql`
+- `backend/sql/v2_2_migration.sql`
+- `backend/sql/v2_3_migration.sql`
+- `backend/sql/v2_4_migration.sql`
 
 ### Guide complet CMD (creation DB + import SQL)
 
@@ -79,10 +82,13 @@ mysql -u root -p -e "CREATE DATABASE IF NOT EXISTS groupeprolongation CHARACTER 
 mysql -u root -p groupeprolongation < backend\sql\schema.sql
 ```
 
-5. Si ta base existe deja et tu veux juste mettre a jour:
+5. Si ta base existe deja, applique les migrations manquantes dans l ordre numerique,
+   en commencant par la version qui suit celle de ta base. Pour une base V2.1 ou anterieure:
 
 ```cmd
 mysql -u root -p groupeprolongation < backend\sql\v2_2_migration.sql
+mysql -u root -p groupeprolongation < backend\sql\v2_3_migration.sql
+mysql -u root -p groupeprolongation < backend\sql\v2_4_migration.sql
 ```
 
 6. Verifier rapidement:

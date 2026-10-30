@@ -35,10 +35,6 @@ if ($configPath === null || $sourceDir === null) {
     header('Content-Type: application/json; charset=utf-8');
     echo json_encode([
         'error' => 'Configuration API introuvable.',
-        'details' => [
-            'checked_roots' => $checkedRoots,
-            'expected_files' => ['config.php', 'src/Database.php', 'src/Http.php', 'src/Validator.php'],
-        ],
     ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     exit;
 }
