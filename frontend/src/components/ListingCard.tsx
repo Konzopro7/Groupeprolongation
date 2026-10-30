@@ -41,7 +41,7 @@ export default function ListingCard({ listing }: ListingCardProps) {
   }
 
   return (
-    <article className="interactive-lift overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-soft">
+    <article className="group listing-card overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-soft">
       <div className="group relative h-52 overflow-hidden">
         {cover && !coverLoadError ? (
           isVideoCover ? (
