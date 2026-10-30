@@ -152,9 +152,6 @@ export default function FaqPage() {
             <p className="text-sm text-slate-600">Questions frequentes pour les visiteurs.</p>
           </div>
         </div>
-        <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-          Information importante: seuls les administrateurs peuvent ajouter, modifier ou supprimer les annonces.
-        </div>
       </section>
 
       <FaqGroup
