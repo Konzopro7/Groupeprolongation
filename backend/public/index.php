@@ -35,10 +35,6 @@ if ($configPath === null || $sourceDir === null) {
     header('Content-Type: application/json; charset=utf-8');
     echo json_encode([
         'error' => 'Configuration API introuvable.',
-        'details' => [
-            'checked_roots' => $checkedRoots,
-            'expected_files' => ['config.php', 'src/Database.php', 'src/Http.php', 'src/Validator.php'],
-        ],
     ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     exit;
 }
@@ -606,13 +602,13 @@ function consumeRateLimit(string $scope, int $maxAttempts, int $windowSeconds): 
 
     $handle = @fopen($filePath, 'c+');
     if ($handle === false) {
-        return ['allowed' => true, 'retry_after' => 0];
+        return ['allowed' => false, 'retry_after' => 60, 'unavailable' => true];
     }
 
     try {
         if (!flock($handle, LOCK_EX)) {
             fclose($handle);
-            return ['allowed' => true, 'retry_after' => 0];
+            return ['allowed' => false, 'retry_after' => 60, 'unavailable' => true];
         }
 
         $raw = stream_get_contents($handle);
@@ -635,27 +631,33 @@ function consumeRateLimit(string $scope, int $maxAttempts, int $windowSeconds): 
         if (count($attempts) >= $maxAttempts) {
             $oldest = min($attempts);
             $retryAfter = max(1, ($oldest + $windowSeconds) - $now);
-            ftruncate($handle, 0);
-            rewind($handle);
-            fwrite($handle, json_encode($attempts));
-            fflush($handle);
             flock($handle, LOCK_UN);
             fclose($handle);
             return ['allowed' => false, 'retry_after' => $retryAfter];
         }
 
         $attempts[] = $now;
-        ftruncate($handle, 0);
-        rewind($handle);
-        fwrite($handle, json_encode($attempts));
-        fflush($handle);
+        $encodedAttempts = json_encode($attempts);
+        if (!is_string($encodedAttempts) || !ftruncate($handle, 0) || !rewind($handle)) {
+            flock($handle, LOCK_UN);
+            fclose($handle);
+            return ['allowed' => false, 'retry_after' => 60, 'unavailable' => true];
+        }
+
+        $bytesWritten = fwrite($handle, $encodedAttempts);
+        if ($bytesWritten !== strlen($encodedAttempts) || !fflush($handle)) {
+            flock($handle, LOCK_UN);
+            fclose($handle);
+            return ['allowed' => false, 'retry_after' => 60, 'unavailable' => true];
+        }
+
         flock($handle, LOCK_UN);
         fclose($handle);
         return ['allowed' => true, 'retry_after' => 0];
     } catch (Throwable) {
         @flock($handle, LOCK_UN);
         @fclose($handle);
-        return ['allowed' => true, 'retry_after' => 0];
+        return ['allowed' => false, 'retry_after' => 60, 'unavailable' => true];
     }
 }
 
@@ -664,6 +666,12 @@ function requireRateLimit(string $scope, int $maxAttempts, int $windowSeconds, s
     $maxAttempts = max(1, $maxAttempts);
     $windowSeconds = max(10, $windowSeconds);
     $result = consumeRateLimit($scope, $maxAttempts, $windowSeconds);
+    if ($result['unavailable'] ?? false) {
+        header('Retry-After: 60');
+        errorResponse('La protection anti-abus est temporairement indisponible. Reessaie dans une minute.', 503);
+        return false;
+    }
+
     if (!($result['allowed'] ?? true)) {
         $retryAfter = (int)($result['retry_after'] ?? 60);
         header('Retry-After: ' . $retryAfter);
