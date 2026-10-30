@@ -19,7 +19,7 @@ function NavItems({ onClick }: { onClick?: () => void }) {
           to={item.to}
           onClick={onClick}
           className={({ isActive }) =>
-            `rounded-xl px-3 py-2 text-sm font-semibold transition duration-200 ${
+            `site-nav-link rounded-xl px-3 py-2 text-sm font-semibold ${
               isActive
                 ? "bg-brand-100 text-brand-800 shadow-[inset_0_0_0_1px_rgba(50,140,245,0.25)]"
                 : "text-slate-700 hover:bg-slate-100 hover:text-slate-900"
@@ -55,13 +55,13 @@ export default function Header() {
 
   return (
     <header
-      className={`sticky top-0 z-30 border-b border-slate-200/70 bg-white/90 backdrop-blur-md transition-shadow duration-300 ${
-        isScrolled ? "shadow-[0_10px_28px_rgba(15,36,56,0.12)]" : ""
+      className={`site-header sticky top-0 z-30 border-b border-slate-200/70 bg-white/90 backdrop-blur-md ${
+        isScrolled ? "site-header-scrolled shadow-[0_10px_28px_rgba(15,36,56,0.12)]" : ""
       }`}
     >
       <div className="mx-auto flex w-full max-w-7xl items-center justify-between px-4 py-3 sm:px-6 lg:px-8">
         <Link to="/" className="flex items-center gap-4 sm:gap-5">
-          <div className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-2xl border border-brand-200 bg-white shadow-soft sm:h-20 sm:w-20">
+          <div className="site-logo-frame flex h-16 w-16 items-center justify-center overflow-hidden rounded-2xl border border-brand-200 bg-white shadow-soft sm:h-20 sm:w-20">
             <img
               src={logoSrc}
               alt="Logo Groupe Prolongation"
@@ -85,16 +85,18 @@ export default function Header() {
 
         <button
           type="button"
-          className="inline-flex rounded-xl border border-slate-200 p-2 text-slate-700 md:hidden"
+          className="inline-flex rounded-xl border border-slate-200 bg-white/80 p-2 text-slate-700 transition hover:border-brand-300 hover:bg-brand-50 md:hidden"
           onClick={() => setIsOpen((prev) => !prev)}
-          aria-label="Ouvrir le menu"
+          aria-label={isOpen ? "Fermer le menu" : "Ouvrir le menu"}
+          aria-expanded={isOpen}
+          aria-controls="mobile-navigation"
         >
           {isOpen ? <XMarkIcon className="h-6 w-6" /> : <Bars3Icon className="h-6 w-6" />}
         </button>
       </div>
 
       {isOpen && (
-        <div className="border-t border-slate-200 bg-white px-4 py-3 md:hidden">
+        <div id="mobile-navigation" className="mobile-nav-panel border-t border-slate-200 bg-white/95 px-4 py-3 backdrop-blur-md md:hidden">
           <nav className="flex flex-col gap-2">
             <NavItems onClick={() => setIsOpen(false)} />
           </nav>
